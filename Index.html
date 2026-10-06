@@ -1,0 +1,1191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Spacetel Card Reconciliation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<style>
+:root{
+  --bg:#EDF1EF; --surface:#FFFFFF; --surface-2:#F6F8F7; --ink:#15232B; --muted:#5C6C73; --rule:#D2DAD7;
+  --ok:#2E7D5B; --ok-soft:#D7EBE1; --time:#3F73AD; --time-soft:#DCE7F4; --bnd:#7E6CB0; --bnd-soft:#E7E2F3;
+  --ex:#C0392B; --ex-soft:#F7DEDA; --none:#E2E7E5; --focus:#3F73AD;
+  --font:"Public Sans",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#111A1F; --surface:#18242A; --surface-2:#1D2B32; --ink:#E5ECEA; --muted:#93A4AB; --rule:#2C3C43;
+  --ok:#4FB386; --ok-soft:#1E3A2F; --time:#6FA0D8; --time-soft:#1E3047; --bnd:#A897D6; --bnd-soft:#2D2843;
+  --ex:#E6705F; --ex-soft:#4A2522; --none:#24343B;}}
+:root[data-theme="dark"]{
+  --bg:#111A1F; --surface:#18242A; --surface-2:#1D2B32; --ink:#E5ECEA; --muted:#93A4AB; --rule:#2C3C43;
+  --ok:#4FB386; --ok-soft:#1E3A2F; --time:#6FA0D8; --time-soft:#1E3047; --bnd:#A897D6; --bnd-soft:#2D2843;
+  --ex:#E6705F; --ex-soft:#4A2522; --none:#24343B;}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--font);font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.wrap{max-width:1440px;margin:0 auto;padding:20px 24px 64px}
+header.top{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:6px 0 18px;border-bottom:1px solid var(--rule);margin-bottom:22px}
+header.top h1{font-size:22px;font-weight:700;margin:0;letter-spacing:-.01em}
+header.top .month{font-weight:700;color:#fff;background:#0E7C7B;border-radius:6px;padding:3px 10px;font-size:14px}
+header.top .brand{font-weight:600;color:#fff;background:#1F2A44;border-radius:6px;padding:3px 10px;font-size:14px}
+
+header.top .spacer{flex:1}
+.btn{border:1px solid var(--rule);background:var(--surface);border-radius:8px;padding:8px 14px;font-weight:600;font-size:14px}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.btn.primary:disabled{opacity:.4;cursor:not-allowed}
+.btn.small{padding:4px 10px;font-size:13px}
+.muted{color:var(--muted)}
+/* upload */
+.intake{display:grid;grid-template-columns:1fr 1fr;gap:18px;max-width:980px}
+@media (max-width:760px){.intake{grid-template-columns:1fr}}
+.drop{background:var(--surface);border:1.5px dashed var(--rule);border-radius:12px;padding:22px;min-height:150px;display:flex;flex-direction:column;gap:8px;transition:border-color .15s}
+.drop.over{border-color:var(--time)}
+.drop.ready{border-style:solid;border-color:var(--ok)}
+.drop h3{margin:0;font-size:16px}
+.drop p{margin:0;font-size:13.5px;color:var(--muted)}
+.drop .file{font-size:13.5px;font-weight:600;color:var(--ok);word-break:break-all}
+.drop label.pick{align-self:flex-start;margin-top:auto}
+.drop input{display:none}
+.intro{max-width:760px;margin:0 0 20px}
+.intro h2{font-size:28px;line-height:1.2;margin:0 0 8px;letter-spacing:-.015em}
+.runrow{display:flex;gap:14px;align-items:center;margin-top:18px;flex-wrap:wrap}
+.status-line{font-size:14px;color:var(--muted)}
+.master-note{margin-top:22px;font-size:13.5px;color:var(--muted);max-width:980px}
+.master-note button{background:none;border:0;padding:0;color:var(--time);text-decoration:underline;font-size:inherit}
+/* summary */
+.strip{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:1px;background:var(--rule);border:1px solid var(--rule);border-radius:12px;overflow:hidden;margin-bottom:18px}
+@media (max-width:900px){.strip{grid-template-columns:repeat(3,1fr)}}
+.strip>div{background:var(--surface);padding:14px 16px}
+.strip .v{font-size:24px;font-weight:700;line-height:1.15}
+.strip .l{font-size:13px;color:var(--muted)}
+.strip .ok .v{color:var(--ok)} .strip .tm .v{color:var(--time)} .strip .ex .v{color:var(--ex)}
+.warn{background:var(--surface);border:1px solid var(--rule);border-left:4px solid var(--bnd);border-radius:8px;padding:10px 14px;margin:0 0 14px;font-size:14px}
+.layout{display:grid;grid-template-columns:200px minmax(0,1fr) 320px;gap:18px;align-items:start}
+@media (max-width:1200px){.layout{grid-template-columns:200px minmax(0,1fr)}.queue{grid-column:1/-1}}
+@media (max-width:760px){.layout{grid-template-columns:1fr}}
+.panel{background:var(--surface);border:1px solid var(--rule);border-radius:12px}
+.panel h3{font-size:14px;font-weight:700;margin:0;padding:12px 14px;border-bottom:1px solid var(--rule)}
+.markets button{display:flex;width:100%;align-items:center;gap:8px;text-align:left;background:none;border:0;border-bottom:1px solid var(--rule);padding:9px 14px;font-size:14px}
+.markets button:last-child{border-bottom:0}
+.markets button[aria-pressed="true"]{background:var(--surface-2);font-weight:700;box-shadow:inset 3px 0 0 var(--ink)}
+.markets .n{margin-left:auto;font-size:12.5px;color:var(--muted)}
+.badge{display:inline-block;min-width:20px;text-align:center;border-radius:10px;padding:0 6px;font-size:12px;font-weight:700;background:var(--ex);color:#fff}
+/* matrix */
+.matrix-head{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--rule);flex-wrap:wrap}
+.matrix-head h3{padding:0;border:0}
+.legend{display:flex;gap:12px;font-size:12.5px;color:var(--muted);flex-wrap:wrap}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.toggle{font-size:13px;display:flex;gap:6px;align-items:center;margin-left:auto}
+.mx{overflow-x:auto}
+table.grid{border-collapse:separate;border-spacing:0;width:100%;min-width:720px}
+table.grid th,table.grid td{padding:0}
+table.grid thead th{font-size:11px;font-weight:600;color:var(--muted);height:26px;text-align:center;position:sticky;top:0;background:var(--surface)}
+table.grid thead th.we{color:var(--ink)}
+table.grid .mk td{font-size:12.5px;font-weight:700;padding:12px 12px 4px;color:var(--muted)}
+table.grid tr.st{cursor:pointer}
+table.grid tr.st:hover .nm{background:var(--surface-2)}
+table.grid .nm{white-space:nowrap;font-size:13px;padding:2px 8px 2px 12px;max-width:190px;overflow:hidden;text-overflow:ellipsis}
+table.grid .nm b{font-weight:600;margin-right:6px;color:var(--muted)}
+table.grid td.c{height:22px;min-width:15px}
+table.grid td.c span{display:block;height:16px;margin:2px 1px;border-radius:3px;background:var(--none)}
+.s-matched span{background:var(--ok)!important;opacity:.85}
+.s-timing span{background:var(--time)!important}
+.s-boundary span{background:var(--bnd)!important}
+.s-exception span{background:var(--ex)!important}
+.s-zero span{background:var(--none)!important}
+table.grid td.net{font-size:12.5px;text-align:right;padding:0 12px 0 8px;white-space:nowrap}
+table.grid td.net.bad{color:var(--ex);font-weight:700}
+#tip{position:fixed;z-index:30;pointer-events:none;background:var(--ink);color:var(--surface);font-size:12.5px;padding:8px 10px;border-radius:8px;max-width:320px;display:none;line-height:1.4}
+/* queue */
+.queue .item{padding:11px 14px;border-bottom:1px solid var(--rule);cursor:pointer}
+.queue .item:hover{background:var(--surface-2)}
+.queue .item:last-child{border-bottom:0}
+.queue .item .h{display:flex;gap:8px;font-size:13.5px;font-weight:600}
+.queue .item .h .amt{margin-left:auto}
+.queue .item .c{font-size:12.5px;color:var(--muted);margin-top:2px}
+.queue .sec{font-size:12.5px;font-weight:700;color:var(--muted);padding:10px 14px 4px;background:var(--surface-2);border-bottom:1px solid var(--rule)}
+.amt.neg{color:var(--ex)}
+.empty{padding:16px 14px;font-size:13.5px;color:var(--muted)}
+/* drawer */
+.scrim{position:fixed;inset:0;background:rgba(10,20,25,.35);z-index:20;display:none}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(980px,100%);background:var(--surface);z-index:21;transform:translateX(100%);transition:transform .22s ease;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.drawer.open{transform:none}
+.scrim.open{display:block}
+@media (prefers-reduced-motion:reduce){.drawer{transition:none}}
+.dhead{padding:16px 22px;border-bottom:1px solid var(--rule);display:flex;gap:12px;align-items:flex-start}
+.dhead h2{margin:0;font-size:20px}
+.dhead .meta{font-size:13px;color:var(--muted)}
+.dbody{overflow:auto;padding:0 22px 30px}
+.totals{display:flex;gap:26px;flex-wrap:wrap;padding:14px 0;font-size:13px;color:var(--muted)}
+.totals b{display:block;color:var(--ink);font-size:17px}
+table.days{border-collapse:collapse;width:100%;font-size:13px;min-width:760px}
+table.days th{text-align:right;font-weight:600;color:var(--muted);padding:6px 8px;border-bottom:1px solid var(--rule);position:sticky;top:0;background:var(--surface)}
+table.days th:first-child,table.days td:first-child,table.days th.l,table.days td.l{text-align:left}
+table.days td{padding:6px 8px;border-bottom:1px solid var(--rule);text-align:right;vertical-align:top}
+table.days tr.r-exception td{background:var(--ex-soft)}
+table.days tr.r-boundary td{background:var(--bnd-soft)}
+table.days td.cm{text-align:left;min-width:260px;color:var(--ink)}
+table.days td.cm textarea{width:100%;min-height:30px;border:1px solid var(--rule);border-radius:6px;padding:4px 6px;font-size:12.5px;background:var(--surface);resize:vertical;margin-top:4px}
+.pill{display:inline-block;font-size:11.5px;font-weight:700;border-radius:10px;padding:1px 8px;white-space:nowrap}
+.p-matched{background:var(--ok-soft);color:var(--ok)} .p-timing{background:var(--time-soft);color:var(--time)}
+.p-boundary{background:var(--bnd-soft);color:var(--bnd)} .p-exception{background:var(--ex-soft);color:var(--ex)}
+details.tx{margin-top:4px} details.tx summary{cursor:pointer;color:var(--time);font-size:12px}
+details.tx table{font-size:12px;border-collapse:collapse;margin-top:4px}
+details.tx td{padding:2px 8px 2px 0;border:0;text-align:left;background:none!important}
+.bankitems{margin-top:22px}
+.bankitems h4{margin:0 0 6px;font-size:14px}
+.bankitems table{font-size:13px;border-collapse:collapse}
+.bankitems td{padding:4px 14px 4px 0}
+.hidden{display:none!important}
+.stores-table{font-size:13px;border-collapse:collapse;width:100%}
+.stores-table td,.stores-table th{padding:5px 10px;border-bottom:1px solid var(--rule);text-align:left}
+.how{max-width:980px;margin-top:30px;font-size:14px;color:var(--muted)}
+.how h3{font-size:15px;color:var(--ink);margin:0 0 6px}
+.how p{margin:0 0 8px;max-width:75ch}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>Card reconciliation</h1>
+    <span class="brand">Spacetel LLC</span>
+    <span class="month hidden" id="monthLabel"></span>
+    <span class="spacer"></span>
+    <button class="btn hidden" id="btnStores">Stores</button>
+    <button class="btn hidden" id="btnNew">New run</button>
+    <button class="btn primary hidden" id="btnExport">Export Excel</button>
+  </header>
+
+  <section id="intake">
+    <div class="intro">
+      <h2>Drop in the two reports, get the whole month reconciled.</h2>
+      <p class="muted">Files are read in this browser only. Nothing is uploaded anywhere.</p>
+    </div>
+    <div class="intake">
+      <div class="drop" id="dropAudit">
+        <h3>ABO cash audit trail</h3>
+        <p>Cash Audit Trail Report export (.xlsx) for the month. Other clients' stores are filtered out automatically. You can add a second file covering the last day of the previous month to clear 1st-of-month carry-ins.</p>
+        <div class="file" id="fileAudit"></div>
+        <label class="btn pick">Choose file<input type="file" accept=".xlsx,.xls,.csv" multiple id="inAudit"></label>
+      </div>
+      <div class="drop" id="dropBank">
+        <h3>Bank transactions</h3>
+        <p>Wells Fargo transaction export (.xlsx). Include a few days into next month so month-end batches are captured.</p>
+        <div class="file" id="fileBank"></div>
+        <label class="btn pick">Choose file<input type="file" accept=".xlsx,.xls,.csv" id="inBank"></label>
+      </div>
+    </div>
+    <div class="runrow">
+      <button class="btn primary" id="btnRun" disabled>Reconcile</button>
+      <span class="status-line" id="runStatus"></span>
+    </div>
+    <p class="master-note" id="masterNote"></p>
+    <input type="file" id="inMaster" accept=".xlsx,.xls" class="hidden">
+    <div class="how">
+      <h3>How each day is checked</h3>
+      <p>Card sales per store and day are taken from the ABO report: Debit column for debit, and all card brands added together for credit. The bank amount for a day is the merchant deposit whose descriptor date is the next day, matched to the store by merchant ID.</p>
+      <p>When the two differ, the app looks at the time of each sale. The processor closes the day's batch at about 8:30 PM, so sales after that land in the next day's deposit. Differences fully explained that way, or that cancel out over the next few days, are marked as timing and get a written comment. Whatever is left goes to the review list, along with chargebacks, adjustments and held funds from the bank file.</p>
+    </div>
+  </section>
+
+  <section id="results" class="hidden">
+    <div id="warnings"></div>
+    <div class="strip" id="strip"></div>
+    <div class="layout">
+      <nav class="panel markets" id="markets" aria-label="Markets"></nav>
+      <div class="panel">
+        <div class="matrix-head">
+          <h3 id="mxTitle">All markets</h3>
+          <div class="legend">
+            <span><i style="background:var(--ok)"></i>Matched</span>
+            <span><i style="background:var(--time)"></i>Timing, explained</span>
+            <span><i style="background:var(--bnd)"></i>Prior-month carry-in</span>
+            <span><i style="background:var(--ex)"></i>Needs review</span>
+            <span><i style="background:var(--none)"></i>No card sales</span>
+          </div>
+          <label class="toggle"><input type="checkbox" id="onlyEx"> Only stores to review</label>
+        </div>
+        <div class="mx"><table class="grid" id="grid"></table></div>
+      </div>
+      <aside class="panel queue" id="queue"></aside>
+    </div>
+  </section>
+
+  <section id="storesView" class="hidden">
+    <div class="panel" style="padding:0 0 8px">
+      <h3>Store list <span class="muted" style="font-weight:400" id="storesCount"></span></h3>
+      <div style="padding:10px 14px;font-size:13.5px" class="muted">These are the stores that get reconciled. To add, remove or move a store: download the store list, edit it in Excel, save, and load it back here. The "Store list" tab in any exported reconciliation works too. <button class="btn small" id="btnTemplate">Download store list</button> <button class="btn small" id="btnLoadMaster">Load store list</button> <button class="btn small" id="btnResetMaster">Restore built-in list</button><div id="masterMsg" style="margin-top:8px"></div></div>
+      <div style="overflow-x:auto"><table class="stores-table" id="storesTable"></table></div>
+    </div>
+  </section>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="dTitle">
+  <div class="dhead">
+    <div style="flex:1"><h2 id="dTitle"></h2><div class="meta" id="dMeta"></div></div>
+    <button class="btn small" id="dClose">Close</button>
+  </div>
+  <div class="dbody" id="dBody"></div>
+</aside>
+<div id="tip"></div>
+
+<script>
+// ===== Spacetel card reconciliation engine =====
+// Pure functions. Input: header-row arrays from the ABO Cash Audit Trail report and the bank transaction export.
+const RecEngine = (() => {
+  const BRANDS = ['American Express', 'China Union Pay', 'Diners Club', 'Discover', 'JCB', 'MasterCard', 'Visa'];
+  const r2 = x => Math.round((x + Number.EPSILON) * 100) / 100;
+  const EPS = 0.005;
+  const DAY = 864e5;
+
+  function serialToParts(s) {
+    const days = Math.floor(s);
+    const mins = Math.round((s - days) * 1440);
+    const d = new Date(Date.UTC(1899, 11, 30) + days * DAY);
+    return { iso: d.toISOString().slice(0, 10), mins: mins >= 1440 ? 1439 : mins };
+  }
+  function parseDateTime(v) {
+    if (v == null || v === '') return null;
+    if (typeof v === 'number') return serialToParts(v);
+    if (v instanceof Date) {
+      return { iso: `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, '0')}-${String(v.getDate()).padStart(2, '0')}`, mins: v.getHours() * 60 + v.getMinutes() };
+    }
+    const s = String(v).trim();
+    let m = s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?)?/i);
+    let y, mo, d, h = 0, mi = 0, ap;
+    if (m) { [, y, mo, d] = m; h = +(m[4] || 0); mi = +(m[5] || 0); ap = m[6]; }
+    else {
+      m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:\s+(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?)?/i);
+      if (!m) return null;
+      [, mo, d, y] = m; if (y.length === 2) y = '20' + y; h = +(m[4] || 0); mi = +(m[5] || 0); ap = m[6];
+    }
+    if (ap) { ap = ap.toUpperCase(); if (ap === 'PM' && h < 12) h += 12; if (ap === 'AM' && h === 12) h = 0; }
+    return { iso: `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`, mins: h * 60 + mi };
+  }
+  const addDays = (iso, n) => new Date(Date.parse(iso + 'T00:00:00Z') + n * DAY).toISOString().slice(0, 10);
+  const md = iso => `${+iso.slice(5, 7)}/${+iso.slice(8, 10)}`;
+  const money = x => (x < 0 ? '-$' : '$') + Math.abs(x).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const clock = mins => { const h = Math.floor(mins / 60), m = mins % 60; return `${((h + 11) % 12) + 1}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`; };
+  const num = v => (typeof v === 'number' ? v : (v == null || v === '' ? 0 : (isFinite(+String(v).replace(/[$,]/g, '')) ? +String(v).replace(/[$,]/g, '') : 0)));
+
+  function headerIndex(rows, required) {
+    for (let i = 0; i < Math.min(rows.length, 15); i++) {
+      const h = (rows[i] || []).map(x => (x == null ? '' : String(x).trim()));
+      if (required.every(r => h.includes(r))) return { at: i, idx: Object.fromEntries(h.map((n, j) => [n, j])) };
+    }
+    return null;
+  }
+
+  // ---------- parse ABO cash audit ----------
+  function parseAudit(rows, storeSet) {
+    const hi = headerIndex(rows, ['Location', 'Date / Time', 'Debit', 'Visa']);
+    if (!hi) throw new Error('This does not look like the ABO Cash Audit Trail report (missing Location / Date / Time / Debit / Visa columns).');
+    const I = hi.idx; const txns = []; const allLocations = new Set(); let minD = null, maxD = null;
+    for (let r = hi.at + 1; r < rows.length; r++) {
+      const row = rows[r]; if (!row) continue;
+      const loc = row[I['Location']]; if (loc == null) continue;
+      const m = String(loc).match(/^\s*(\d+)\s*:/); if (!m) continue;
+      const store = +m[1]; allLocations.add(store);
+      if (!storeSet.has(store)) continue;
+      const debit = num(row[I['Debit']]);
+      let credit = 0; for (const b of BRANDS) if (I[b] != null) credit += num(row[I[b]]);
+      if (Math.abs(debit) < EPS && Math.abs(credit) < EPS) continue;
+      const t = parseDateTime(row[I['Date / Time']]); if (!t) continue;
+      if (!minD || t.iso < minD) minD = t.iso; if (!maxD || t.iso > maxD) maxD = t.iso;
+      txns.push({ store, iso: t.iso, mins: t.mins, debit: r2(debit), credit: r2(credit), amt: r2(debit + credit),
+        txn: I['Transaction #'] != null ? row[I['Transaction #']] : '', type: I['Type'] != null ? row[I['Type']] : '',
+        user: I['User Name'] != null ? row[I['User Name']] : '' });
+    }
+    return { txns, minD, maxD, locationsInFile: allLocations.size };
+  }
+
+  // ---------- parse bank export ----------
+  const MERCH_RE = /MERCHANT SERVICE\s+(MERCH DEP|MERCH CHBK|MERCH ADJ|MERCH REL|MTHLY DISC|[A-Z ]+?)\s+(\d{6})\s+(\d{13,17})/;
+  function parseBank(rows, master) {
+    const hi = headerIndex(rows, ['Description', 'Credit Amt', 'Debit Amt']);
+    if (!hi) throw new Error('This does not look like the bank transaction export (missing Description / Credit Amt / Debit Amt columns).');
+    const I = hi.idx; const items = []; const unknownMids = new Map(); const midCache = new Map();
+    const lookup = mid => {
+      if (midCache.has(mid)) return midCache.get(mid);
+      let hit = null;
+      for (const s of master) { const k = String(s.mid || '').replace(/\D/g, ''); if (k && (mid.startsWith(k) || k.startsWith(mid))) { hit = s.store; break; } }
+      midCache.set(mid, hit); return hit;
+    };
+    let minD = null, maxD = null;
+    for (let r = hi.at + 1; r < rows.length; r++) {
+      const row = rows[r]; if (!row) continue;
+      const desc = String(row[I['Description']] ?? (I['Descriptive Text 1'] != null ? row[I['Descriptive Text 1']] : '') ?? '');
+      const asof = I['As-Of Date'] != null ? parseDateTime(row[I['As-Of Date']]) : null;
+      if (asof) { if (!minD || asof.iso < minD) minD = asof.iso; if (!maxD || asof.iso > maxD) maxD = asof.iso; }
+      const m = desc.match(MERCH_RE); if (!m) continue;
+      const kindRaw = m[1].trim();
+      const kind = { 'MERCH DEP': 'DEP', 'MERCH CHBK': 'CHBK', 'MERCH ADJ': 'ADJ', 'MERCH REL': 'REL', 'MTHLY DISC': 'DISC' }[kindRaw] || kindRaw;
+      const dd = m[2]; const ddate = `20${dd.slice(0, 2)}-${dd.slice(2, 4)}-${dd.slice(4, 6)}`;
+      const mid = m[3]; const store = lookup(mid);
+      const amt = r2(num(row[I['Credit Amt']]) - num(row[I['Debit Amt']]));
+      if (store == null) { const u = unknownMids.get(mid) || { mid, count: 0, total: 0 }; u.count++; u.total = r2(u.total + amt); unknownMids.set(mid, u); continue; }
+      items.push({ store, kind, ddate, asof: asof ? asof.iso : ddate, amt, mid, desc });
+    }
+    return { items, minD, maxD, unknownMids: [...unknownMids.values()] };
+  }
+
+  // ---------- core ----------
+  function detectMonth(txns) {
+    const c = {}; for (const t of txns) { const k = t.iso.slice(0, 7); c[k] = (c[k] || 0) + 1; }
+    return Object.entries(c).sort((a, b) => b[1] - a[1])[0]?.[0];
+  }
+
+  function reconcile({ auditRows, bankRows, master, month: forcedMonth, cutoffOverride }) {
+    const storeSet = new Set(master.map(s => s.store));
+    const audit = parseAudit(auditRows, storeSet);
+    const bank = parseBank(bankRows, master);
+    if (!audit.txns.length) throw new Error('No card transactions for your stores were found in the ABO report.');
+    const month = forcedMonth || detectMonth(audit.txns);
+    const [Y, M] = month.split('-').map(Number);
+    const nDays = new Date(Date.UTC(Y, M, 0)).getUTCDate();
+    const days = Array.from({ length: nDays }, (_, i) => `${month}-${String(i + 1).padStart(2, '0')}`);
+    const first = days[0], last = days[nDays - 1];
+    const prevDay = addDays(first, -1), nextDay = addDays(last, 1);
+    const auditHas = iso => iso >= audit.minD && iso <= audit.maxD;
+
+    const byStoreTx = new Map(), byStoreBank = new Map();
+    for (const s of master) { byStoreTx.set(s.store, []); byStoreBank.set(s.store, []); }
+    for (const t of audit.txns) byStoreTx.get(t.store).push(t);
+    for (const b of bank.items) byStoreBank.get(b.store).push(b);
+
+    // deposits keyed by business day (= descriptor date - 1)
+    const depFor = new Map();
+    for (const b of bank.items) if (b.kind === 'DEP') {
+      const k = b.store + '|' + addDays(b.ddate, -1); depFor.set(k, r2((depFor.get(k) || 0) + b.amt));
+    }
+
+    // ---- learn batch cut-off: global, then per store ----
+    const CANDS = []; for (let c = 17 * 60; c <= 23 * 60 + 55; c += 5) CANDS.push(c);
+    const interior = days.slice(1, -1);
+    function scoreStore(store, C) {
+      const tot = new Map();
+      for (const t of byStoreTx.get(store)) { const bd = t.mins >= C ? addDays(t.iso, 1) : t.iso; tot.set(bd, (tot.get(bd) || 0) + t.amt); }
+      let ok = 0; for (const d of interior) if (Math.abs((tot.get(d) || 0) - (depFor.get(store + '|' + d) || 0)) < 0.01) ok++;
+      return ok;
+    }
+    const scores = new Map(); const globalScore = new Array(CANDS.length).fill(0);
+    for (const s of master) { const arr = CANDS.map(C => scoreStore(s.store, C)); scores.set(s.store, arr); arr.forEach((v, i) => globalScore[i] += v); }
+    const gi = globalScore.indexOf(Math.max(...globalScore)); const globalCut = cutoffOverride ?? CANDS[gi];
+    const cutFor = new Map();
+    for (const s of master) {
+      if (cutoffOverride != null) { cutFor.set(s.store, cutoffOverride); continue; }
+      const arr = scores.get(s.store); const best = Math.max(...arr); const atGlobal = arr[gi];
+      if (best - atGlobal >= 2) {
+        let bi = -1, bd = 1e9; arr.forEach((v, i) => { if (v === best && Math.abs(CANDS[i] - globalCut) < bd) { bd = Math.abs(CANDS[i] - globalCut); bi = i; } });
+        cutFor.set(s.store, CANDS[bi]);
+      } else cutFor.set(s.store, globalCut);
+    }
+
+    // ---- per store / day ----
+    const stores = [];
+    for (const s of master) {
+      const C = cutFor.get(s.store); const tx = byStoreTx.get(s.store);
+      const cal = new Map(), late = new Map();
+      for (const t of tx) {
+        const c = cal.get(t.iso) || { F: 0, G: 0, list: [] }; c.F += t.debit; c.G += t.credit; c.list.push(t); cal.set(t.iso, c);
+        if (t.mins >= C) { const l = late.get(t.iso) || []; l.push(t); late.set(t.iso, l); }
+      }
+      const rows = days.map(d => {
+        const c = cal.get(d) || { F: 0, G: 0, list: [] };
+        const F = r2(c.F), G = r2(c.G), H = r2(F + G);
+        const I = r2(depFor.get(s.store + '|' + d) || 0);
+        const J = r2(I - H);
+        const lateOutList = late.get(d) || []; const lateOut = r2(lateOutList.reduce((a, t) => a + t.amt, 0));
+        const pd = addDays(d, -1); const knownPrev = auditHas(pd);
+        const lateInList = knownPrev ? (late.get(pd) || []) : []; const lateIn = r2(lateInList.reduce((a, t) => a + t.amt, 0));
+        const expected = r2(H - lateOut + lateIn); const resid = r2(I - expected);
+        return { date: d, F, G, H, I, J, lateOut, lateOutList, lateIn, lateInList, knownPrev, resid, status: '', comment: '', parts: [], txns: c.list };
+      });
+      // classify
+      for (const r of rows) {
+        const nd = addDays(r.date, 1), pd = addDays(r.date, -1);
+        const timingBits = [];
+        if (r.lateOut) timingBits.push(`${money(r.lateOut)} sold after ${clock(C)} → ${md(nd)} batch${r.date === last ? ' (next month)' : ''}`);
+        if (r.lateIn) timingBits.push(`incl. ${money(r.lateIn)} sold ${md(pd)} after ${clock(C)}`);
+        if (Math.abs(r.J) < 0.01 && Math.abs(r.resid) < 0.01) { r.status = 'matched'; if (r.lateOut || r.lateIn) r.comment = ''; continue; }
+        if (Math.abs(r.J) < 0.01) { r.status = 'matched'; continue; }
+        if (Math.abs(r.resid) < 0.01) { r.status = 'timing'; r.comment = timingBits.join('; '); continue; }
+        // processor sometimes skips the cut-off for a day (whole day in one batch) — test the variants
+        if (r.lateOut && Math.abs(r.I - (r.H + r.lateIn)) < 0.01) {
+          r.resid = 0; r.status = 'timing';
+          r.comment = [r.lateIn ? `incl. ${money(r.lateIn)} sold ${md(pd)} after ${clock(C)}` : '', `full day batched (no ${clock(C)} split)`].filter(Boolean).join('; ');
+          continue;
+        }
+        if (r.lateIn && Math.abs(r.I - (r.H - r.lateOut)) < 0.01) {
+          r.resid = 0; r.status = 'timing';
+          r.comment = [r.lateOut ? `${money(r.lateOut)} sold after ${clock(C)} → ${md(nd)} batch` : '', `${md(pd)} late sales were not carried in`].filter(Boolean).join('; ');
+          continue;
+        }
+        if (r.date === first && !r.knownPrev && r.resid > 0) {
+          r.status = 'boundary'; r.comment = [...timingBits, `${money(r.resid)} deposited for ${md(pd)} (prior month)`].join('; '); continue;
+        }
+        r.status = 'exception'; r.timingBits = timingBits;
+      }
+      // pair residual offsets across neighbouring days (combined / split batches)
+      for (let i = 0; i < rows.length; i++) {
+        const a = rows[i]; if (a.status !== 'exception') continue;
+        let acc = a.resid;
+        for (let k = 1; k <= 6 && i + k < rows.length; k++) {
+          const b = rows[i + k]; if (b.status !== 'exception') { if (Math.abs(b.resid) >= 0.01 && b.status !== 'boundary') break; else continue; }
+          acc = r2(acc + b.resid);
+          if (Math.abs(acc) < 0.01) {
+            for (let j = i; j <= i + k; j++) {
+              const x = rows[j]; if (x.status !== 'exception') continue;
+              x.status = 'timing';
+              const other = j === i ? rows[i + k] : rows[i];
+              const bits = [...(x.timingBits || [])];
+              bits.push(x.resid < 0 ? `${money(-x.resid)} → ${md(other.date)} batch` : `incl. ${money(x.resid)} for ${md(other.date)} sales`);
+              x.comment = bits.join('; ');
+            }
+            break;
+          }
+        }
+      }
+      // early-month residue that nets positive while the prior day is outside the ABO range = prior-month carry-in
+      if (!auditHas(prevDay)) {
+        const early = rows.filter(r => r.status === 'exception' && r.date <= addDays(first, 6));
+        const net = r2(early.reduce((a, r) => a + r.resid, 0));
+        if (early.length && net > 0.009) {
+          const span = `${md(early[0].date)}–${md(early[early.length - 1].date)}`;
+          early.forEach(r => { r.status = 'boundary'; r.comment = [...(r.timingBits || []), `part of net ${money(net)} deposited ${span} for ${md(prevDay)} sales (prior month)`].join('; '); });
+        }
+      }
+      // remaining exceptions: describe + hints
+      const others = byStoreBank.get(s.store).filter(b => b.kind !== 'DEP');
+      for (const r of rows) {
+        if (r.status !== 'exception') continue;
+        const bits = [...(r.timingBits || [])];
+        const hints = [];
+        if (r.I === 0 && r.H !== 0) hints.push('no deposit received');
+        const single = r.txns.find(t => Math.abs(t.amt + r.resid) < 0.01);
+        if (single && r.resid < 0) hints.push(`matches txn ${single.txn} ${money(single.amt)} at ${clock(single.mins)} (void/declined?)`);
+        const KN = { CHBK: 'chargeback', ADJ: 'adjustment', REL: 'released hold', DISC: 'monthly fee' };
+        const ob = others.find(b => Math.abs(Math.abs(b.amt) - Math.abs(r.resid)) < 0.01) || (r.I === 0 ? others.find(b => Math.abs(Math.abs(b.amt) - Math.abs(r.H - r.lateOut + r.lateIn)) < 0.01) : null);
+        if (ob) { hints.push(`${KN[ob.kind] || ob.kind} ${money(ob.amt)} posted ${md(ob.asof)}`); r.linked = ob; }
+        if (r.date === last && r.resid < 0) hints.push('may settle next month');
+        r.comment = [...bits, `${money(Math.abs(r.resid))} ${r.resid < 0 ? 'short' : 'over'}${hints.length ? ' – ' + hints.join('; ') : ' – not explained by batch timing'}`].join('; ');
+      }
+      // a run of short days that adds up to a later hold release / adjustment
+      const exIdx = rows.map((r, i) => r.status === 'exception' ? i : -1).filter(i => i >= 0);
+      for (const ob of others.filter(b => b.kind === 'REL' || b.kind === 'ADJ')) {
+        for (let a = 0; a < exIdx.length; a++) {
+          let acc = 0; let hit = -1;
+          for (let b = a; b < exIdx.length && exIdx[b] - exIdx[a] <= 10; b++) { acc = r2(acc + rows[exIdx[b]].resid); if (Math.abs(Math.abs(acc) - Math.abs(ob.amt)) < 0.01) { hit = b; break; } }
+          if (hit >= 0 && hit > a) {
+            const span = exIdx.slice(a, hit + 1).map(i => rows[i]);
+            const label = `part of ${money(Math.abs(ob.amt))} ${ob.kind === 'REL' ? 'held by processor, released' : 'adjusted'} ${md(ob.asof)} (${md(span[0].date)}–${md(span[span.length - 1].date)})`;
+            span.forEach(x => { x.comment = x.comment.replace(/ – (no deposit received|not explained by batch timing)$/, '') + ' – ' + label; x.linked = ob; });
+            break;
+          }
+        }
+      }
+      const sum = k => r2(rows.reduce((a, r) => a + r[k], 0));
+      const unexplained = r2(rows.filter(r => r.status === 'exception').reduce((a, r) => a + r.resid, 0));
+      const boundaryIn = r2(rows.filter(r => r.status === 'boundary').reduce((a, r) => a + r.resid, 0));
+      const lastRow = rows[rows.length - 1];
+      const carryOut = r2(lastRow.lateOut);
+      const otherItems = others.filter(b => b.ddate > first && b.ddate <= nextDay || (b.kind === 'DISC' && b.asof >= first && b.asof <= last));
+      const counts = { matched: 0, timing: 0, boundary: 0, exception: 0 };
+      rows.forEach(r => counts[r.status]++);
+      stores.push({ ...s, cutoff: C, rows, F: sum('F'), G: sum('G'), H: sum('H'), I: sum('I'), J: sum('J'), unexplained, boundaryIn, carryOut, counts,
+        otherItems, txCount: tx.length });
+    }
+    const missingInAudit = master.filter(s => !byStoreTx.get(s.store).length).map(s => s.store);
+    const warnings = [];
+    if (bank.maxD && bank.maxD < addDays(nextDay, 1)) warnings.push(`Bank export ends ${md(bank.maxD)}; deposits for the last days of the month may be missing. Pull it through at least ${md(addDays(nextDay, 2))}.`);
+    if (audit.minD > first || audit.maxD < last) warnings.push(`ABO report covers ${md(audit.minD)}–${md(audit.maxD)}, not the full month.`);
+    if (missingInAudit.length) warnings.push(`${missingInAudit.length} store(s) have no card sales in the ABO report: ${missingInAudit.join(', ')}.`);
+    return { month, days, first, last, stores, globalCut, auditRange: [audit.minD, audit.maxD], bankRange: [bank.minD, bank.maxD],
+      unknownMids: bank.unknownMids, warnings, locationsInFile: audit.locationsInFile, txCount: audit.txns.length,
+      generatedAt: new Date().toISOString() };
+  }
+
+  // parse store master from a reconciliation workbook (sheet arrays keyed by name)
+  function masterFromRecon(sheets) {
+    const out = [];
+    for (const [tab, rows] of Object.entries(sheets)) {
+      const posLabel = 'ABO';
+      for (const row of rows) {
+        if (!row) continue; const d = row[3];
+        if (typeof d !== 'string' || !/^\s*\d+\s*:/.test(d)) continue;
+        const firstLine = d.split('\n')[0].trim();
+        const store = +firstLine.match(/^\s*(\d+)/)[1];
+        const ids = d.match(/\d{13,17}/g); if (!ids) continue;
+        let name = firstLine.replace(/^\d+\s*:\s*/, '').replace(/\s+\d{13,}.*$/, '').replace('Spacetel LLC', '').replace(/^[\s-]+/, '').trim();
+        if (!out.find(o => o.store === store)) out.push({ store, name, market: tab, dm: String(row[2] ?? tab).trim(), client: tab, pos: posLabel, mid: ids[ids.length - 1] });
+      }
+    }
+    return out;
+  }
+
+
+  // parse the simple "Store list" template (Store # / Store name / Market / District Manager / Name on client summary / Merchant ID)
+  function masterFromStoreList(sheets) {
+    const norm = v => String(v ?? '').toLowerCase().replace(/[^a-z#]/g, '');
+    for (const rows of Object.values(sheets)) {
+      for (let h = 0; h < Math.min(rows.length, 15); h++) {
+        const hdr = (rows[h] || []).map(norm);
+        const col = keys => hdr.findIndex(x => keys.includes(x));
+        const cStore = col(['store#', 'store', 'storeno', 'storenumber']), cMid = col(['merchantid', 'mid']);
+        if (cStore < 0 || cMid < 0) continue;
+        const cName = col(['storename', 'location', 'name']), cMk = col(['market', 'marketsheetname', 'marketsheet', 'sheet', 'tab']);
+        const cDm = col(['districtmanager', 'dm', 'areamanager']), cCl = col(['nameonclientsummary', 'clientname', 'clientsummaryname']);
+        const out = [], problems = [];
+        for (let r = h + 1; r < rows.length; r++) {
+          const row = rows[r]; if (!row || row.every(v => v == null || v === '')) continue;
+          const sv = row[cStore]; if (sv == null || sv === '') continue;
+          const store = parseInt(String(sv).replace(/\D/g, ''), 10);
+          if (!store) { problems.push(`Row ${r + 1}: store number "${sv}" is not a number`); continue; }
+          let mid = row[cMid]; mid = typeof mid === 'number' ? mid.toFixed(0) : String(mid ?? '').replace(/\D/g, '');
+          if (mid.length < 13) { problems.push(`Row ${r + 1} (store ${store}): merchant ID "${row[cMid] ?? ''}" should be the 14–15 digit ID from the bank description`); continue; }
+          if (out.find(o => o.store === store)) { problems.push(`Row ${r + 1}: store ${store} is listed twice; the second one was skipped`); continue; }
+          const market = String((cMk >= 0 ? row[cMk] : '') ?? '').trim() || 'Unassigned';
+          out.push({ store, name: String((cName >= 0 ? row[cName] : '') ?? '').trim() || String(store), market,
+            dm: String((cDm >= 0 ? row[cDm] : '') ?? '').trim() || market, client: String((cCl >= 0 ? row[cCl] : '') ?? '').trim() || market, pos: 'ABO', mid });
+        }
+        const order = [...new Set(out.map(s => s.market))];
+        out.sort((x, y) => order.indexOf(x.market) - order.indexOf(y.market)); // keep each market together (stable sort)
+        return { list: out, problems };
+      }
+    }
+    return null;
+  }
+
+  return { reconcile, masterFromRecon, masterFromStoreList, money, md, clock, addDays, r2 };
+})();
+
+
+const BUILTIN_MASTER = [{"store": 138, "name": "Blythe", "market": "Abdulhafez Abdulla", "dm": "Abdulhafez Abdulla", "pos": "ABO", "mid": "18059429225797", "client": "Abdulhafez Abdulla"}, {"store": 141, "name": "Mecca", "market": "Abdulhafez Abdulla", "dm": "Abdulhafez Abdulla", "pos": "ABO", "mid": "18092664225788", "client": "Abdulhafez Abdulla"}, {"store": 173, "name": "Beaumont", "market": "Abdulhafez Abdulla", "dm": "Abdulhafez Abdulla", "pos": "ABO", "mid": "18098315225814", "client": "Abdulhafez Abdulla"}, {"store": 179, "name": "Hemet", "market": "Abdulhafez Abdulla", "dm": "Abdulhafez Abdulla", "pos": "ABO", "mid": "18068014225816", "client": "Abdulhafez Abdulla"}, {"store": 181, "name": "Perris", "market": "Abdulhafez Abdulla", "dm": "Abdulhafez Abdulla", "pos": "ABO", "mid": "18081886225812", "client": "Abdulhafez Abdulla"}, {"store": 188, "name": "Indio", "market": "Abdulhafez Abdulla", "dm": "Abdulhafez Abdulla", "pos": "ABO", "mid": "18093522225834", "client": "Abdulhafez Abdulla"}, {"store": 259, "name": "Desert Hot Springs", "market": "Abdulhafez Abdulla", "dm": "Abdulhafez Abdulla", "pos": "ABO", "mid": "18066886225830", "client": "Abdulhafez Abdulla"}, {"store": 283, "name": "San Jacinto", "market": "Abdulhafez Abdulla", "dm": "Abdulhafez Abdulla", "pos": "ABO", "mid": "18047564225851", "client": "Abdulhafez Abdulla"}, {"store": 136, "name": "King City", "market": "Abrianna", "dm": "Abrianna", "pos": "ABO", "mid": "18032231225970", "client": "Abrianna Rodriguez"}, {"store": 248, "name": "N. Broadway", "market": "Abrianna", "dm": "Abrianna", "pos": "ABO", "mid": "18093542225842", "client": "Abrianna Rodriguez"}, {"store": 331, "name": "Gonzales", "market": "Abrianna", "dm": "Abrianna", "pos": "ABO", "mid": "18083484225864", "client": "Abrianna Rodriguez"}, {"store": 334, "name": "Salinas", "market": "Abrianna", "dm": "Abrianna", "pos": "ABO", "mid": "18055377225869", "client": "Abrianna Rodriguez"}, {"store": 336, "name": "Williams Rd", "market": "Abrianna", "dm": "Abrianna", "pos": "ABO", "mid": "18069733225902", "client": "Abrianna Rodriguez"}, {"store": 337, "name": "Davis Rd", "market": "Abrianna", "dm": "Abrianna", "pos": "ABO", "mid": "18057847225903", "client": "Abrianna Rodriguez"}, {"store": 342, "name": "Greenfield", "market": "Abrianna", "dm": "Abrianna", "pos": "ABO", "mid": "18089390225908", "client": "Abrianna Rodriguez"}, {"store": 343, "name": "Boronda Rd", "market": "Abrianna", "dm": "Abrianna", "pos": "ABO", "mid": "18038591225909", "client": "Abrianna Rodriguez"}, {"store": 100, "name": "C St", "market": "AnaKaren", "dm": "AnaKaren", "pos": "ABO", "mid": "18019594225759", "client": "AnaKaren"}, {"store": 191, "name": "Blackstone Ave", "market": "AnaKaren", "dm": "AnaKaren", "pos": "ABO", "mid": "18077226225836", "client": "AnaKaren"}, {"store": 307, "name": "N. Cedar", "market": "AnaKaren", "dm": "AnaKaren", "pos": "ABO", "mid": "18024990225888", "client": "AnaKaren"}, {"store": 327, "name": "Tulare St", "market": "AnaKaren", "dm": "AnaKaren", "pos": "ABO", "mid": "18048578225847", "client": "AnaKaren"}, {"store": 332, "name": "Pinedale", "market": "AnaKaren", "dm": "AnaKaren", "pos": "ABO", "mid": "18028417225863", "client": "AnaKaren"}, {"store": 341, "name": "Sierra Vista Mall", "market": "AnaKaren", "dm": "AnaKaren", "pos": "ABO", "mid": "18039377225907", "client": "AnaKaren"}, {"store": 326, "name": "Chestnut Ave", "market": "AnaKaren", "dm": "AnaKaren", "pos": "ABO", "mid": "18068807225898", "client": "AnaKaren"}, {"store": 328, "name": "East Shields", "market": "AnaKaren", "dm": "AnaKaren", "pos": "ABO", "mid": "18060533225865", "client": "AnaKaren"}, {"store": 330, "name": "First St", "market": "AnaKaren", "dm": "AnaKaren", "pos": "ABO", "mid": "18027794225861", "client": "AnaKaren"}, {"store": 375, "name": "E. Kings Canyon", "market": "AnaKaren", "dm": "AnaKaren", "pos": "ABO", "mid": "18080450225938", "client": "AnaKaren"}, {"store": 381, "name": "Blackstone", "market": "AnaKaren", "dm": "AnaKaren", "pos": "ABO", "mid": "18069047225934", "client": "AnaKaren"}, {"store": 480, "name": "Fresno", "market": "AnaKaren", "dm": "AnaKaren", "pos": "ABO", "mid": "180344532408706", "client": "AnaKaren"}, {"store": 142, "name": "New Lemon Grove", "market": "Priscilla Velarde", "dm": "Aida Priscilla", "pos": "ABO", "mid": "18085735225787", "client": "Aida Priscilla"}, {"store": 146, "name": "Vista", "market": "Priscilla Velarde", "dm": "Aida Priscilla", "pos": "ABO", "mid": "18033309225785", "client": "Aida Priscilla"}, {"store": 148, "name": "Calexico", "market": "Priscilla Velarde", "dm": "Aida Priscilla", "pos": "ABO", "mid": "18058970225784", "client": "Aida Priscilla"}, {"store": 150, "name": "54th San Diego", "market": "Priscilla Velarde", "dm": "Aida Priscilla", "pos": "ABO", "mid": "18032278225779", "client": "Aida Priscilla"}, {"store": 151, "name": "El Cajon", "market": "Priscilla Velarde", "dm": "Aida Priscilla", "pos": "ABO", "mid": "18064222225778", "client": "Aida Priscilla"}, {"store": 152, "name": "San Marcos", "market": "Priscilla Velarde", "dm": "Aida Priscilla", "pos": "ABO", "mid": "18027345225789", "client": "Aida Priscilla"}, {"store": 156, "name": "East Valley", "market": "Priscilla Velarde", "dm": "Aida Priscilla", "pos": "ABO", "mid": "18059041225799", "client": "Aida Priscilla"}, {"store": 157, "name": "El Centro", "market": "Priscilla Velarde", "dm": "Aida Priscilla", "pos": "ABO", "mid": "18066975225802", "client": "Aida Priscilla"}, {"store": 159, "name": "Highland", "market": "Priscilla Velarde", "dm": "Aida Priscilla", "pos": "ABO", "mid": "18061785225803", "client": "Aida Priscilla"}, {"store": 162, "name": "Mira Mesa", "market": "Priscilla Velarde", "dm": "Aida Priscilla", "pos": "ABO", "mid": "18074639225807", "client": "Aida Priscilla"}, {"store": 421, "name": "3648 University", "market": "Priscilla Velarde", "dm": "Aida Priscilla", "pos": "ABO", "mid": "18011357225946", "client": "Aida Priscilla"}, {"store": 422, "name": "43RD Street", "market": "Priscilla Velarde", "dm": "Aida Priscilla", "pos": "ABO", "mid": "18027150225947", "client": "Aida Priscilla"}, {"store": 357, "name": "Winslow", "market": "Brenda", "dm": "Brenda", "pos": "ABO", "mid": "18064162225919", "client": "Brenda"}, {"store": 362, "name": "Tuba City", "market": "Brenda", "dm": "Brenda", "pos": "ABO", "mid": "18050404225928", "client": "Brenda"}, {"store": 461, "name": "Holbrook", "market": "Brenda", "dm": "Brenda", "pos": "ABO", "mid": "180904452355543", "client": "Brenda"}, {"store": 465, "name": "Kayenta", "market": "Brenda", "dm": "Brenda", "pos": "ABO", "mid": "180200112393312", "client": "Brenda"}, {"store": 117, "name": "Apache", "market": "Ofelda", "dm": "Ofelda Arteaga", "pos": "ABO", "mid": "18096898225858", "client": "Ofelda Arteaga"}, {"store": 132, "name": "Orosi", "market": "Ofelda", "dm": "Ofelda Arteaga", "pos": "ABO", "mid": "18022737225882", "client": "Ofelda Arteaga"}, {"store": 134, "name": "Orange Cove", "market": "Ofelda", "dm": "Ofelda Arteaga", "pos": "ABO", "mid": "180220562258861", "client": "Ofelda Arteaga"}, {"store": 251, "name": "Sanger", "market": "Ofelda", "dm": "Ofelda Arteaga", "pos": "ABO", "mid": "18089551225840", "client": "Ofelda Arteaga"}, {"store": 335, "name": "Parlier", "market": "Ofelda", "dm": "Ofelda Arteaga", "pos": "ABO", "mid": "18044197225872", "client": "Ofelda Arteaga"}, {"store": 338, "name": "Selma", "market": "Ofelda", "dm": "Ofelda Arteaga", "pos": "ABO", "mid": "18010360225904", "client": "Ofelda Arteaga"}, {"store": 477, "name": "Cellular & Paging Communications", "market": "Ofelda", "dm": "Ofelda Arteaga", "pos": "ABO", "mid": "180866912408698", "client": "Ofelda Arteaga"}, {"store": 478, "name": "Dinuba", "market": "Ofelda", "dm": "Ofelda Arteaga", "pos": "ABO", "mid": "180543492408730", "client": "Ofelda Arteaga"}, {"store": 482, "name": "RELO_Dinuba_CA_2148 E El Monte Way_Cellular & Pagi", "market": "Ofelda", "dm": "Ofelda Arteaga", "pos": "ABO", "mid": "180994892408656", "client": "Ofelda Arteaga"}, {"store": 102, "name": "Global Wireless", "market": "Mildert", "dm": "Mildert", "pos": "ABO", "mid": "18074545225763", "client": "Mildert"}, {"store": 103, "name": "Los Banos", "market": "Mildert", "dm": "Mildert", "pos": "ABO", "mid": "18050742225765", "client": "Mildert"}, {"store": 104, "name": "Merced", "market": "Mildert", "dm": "Mildert", "pos": "ABO", "mid": "180117892257715", "client": "Mildert"}, {"store": 154, "name": "Winton", "market": "Mildert", "dm": "Mildert", "pos": "ABO", "mid": "18042537225791", "client": "Mildert"}, {"store": 238, "name": "Atwater", "market": "Mildert", "dm": "Mildert", "pos": "ABO", "mid": "18078092225837", "client": "Mildert"}, {"store": 239, "name": "G Street", "market": "Mildert", "dm": "Mildert", "pos": "ABO", "mid": "18089659225823", "client": "Mildert"}, {"store": 245, "name": "Delhi", "market": "Mildert", "dm": "Mildert", "pos": "ABO", "mid": "18025576225818", "client": "Mildert"}, {"store": 272, "name": "Livingstone", "market": "Mildert", "dm": "Mildert", "pos": "ABO", "mid": "18069989225828", "client": "Mildert"}, {"store": 105, "name": "Noble", "market": "Nallely Robles Tovar", "dm": "Nallely Robles Tovar", "pos": "ABO", "mid": "18019935225775", "client": "Nallely Robles Tovar"}, {"store": 106, "name": "Tulare", "market": "Nallely Robles Tovar", "dm": "Nallely Robles Tovar", "pos": "ABO", "mid": "18020559225790", "client": "Nallely Robles Tovar"}, {"store": 137, "name": "Earlimart Wireless", "market": "Nallely Robles Tovar", "dm": "Nallely Robles Tovar", "pos": "ABO", "mid": "18039879225782", "client": "Nallely Robles Tovar"}, {"store": 172, "name": "Woodlake", "market": "Nallely Robles Tovar", "dm": "Nallely Robles Tovar", "pos": "ABO", "mid": "18072366225813", "client": "Nallely Robles Tovar"}, {"store": 306, "name": "Bakersfield", "market": "Nallely Robles Tovar", "dm": "Nallely Robles Tovar", "pos": "ABO", "mid": "18079530225887", "client": "Nallely Robles Tovar"}, {"store": 402, "name": "CA 65 Lindsay", "market": "Nallely Robles Tovar", "dm": "Nallely Robles Tovar", "pos": "ABO", "mid": "18096278225945", "client": "Nallely Robles Tovar"}, {"store": 468, "name": "Porterville", "market": "Nallely Robles Tovar", "dm": "Nallely Robles Tovar", "pos": "ABO", "mid": "180793152384444", "client": "Nallely Robles Tovar"}, {"store": 469, "name": "Porterville", "market": "Nallely Robles Tovar", "dm": "Nallely Robles Tovar", "pos": "ABO", "mid": "180691872384485", "client": "Nallely Robles Tovar"}, {"store": 122, "name": "West Shaw Ave", "market": "Paola Marquez", "dm": "Paola Marquez", "pos": "ABO", "mid": "18051095225735", "client": "Paola Marquez"}, {"store": 123, "name": "Mendota", "market": "Paola Marquez", "dm": "Paola Marquez", "pos": "ABO", "mid": "18014651225862", "client": "Paola Marquez"}, {"store": 129, "name": "Clinton Ave", "market": "Paola Marquez", "dm": "Paola Marquez", "pos": "ABO", "mid": "18061599225875", "client": "Paola Marquez"}, {"store": 130, "name": "Ashlan", "market": "Paola Marquez", "dm": "Paola Marquez", "pos": "ABO", "mid": "18065144225877", "client": "Paola Marquez"}, {"store": 325, "name": "Firebaugh", "market": "Paola Marquez", "dm": "Paola Marquez", "pos": "ABO", "mid": "18012601225896", "client": "Paola Marquez"}, {"store": 333, "name": "East Shaw", "market": "Paola Marquez", "dm": "Paola Marquez", "pos": "ABO", "mid": "18076705225867", "client": "Paola Marquez"}, {"store": 340, "name": "Kerman", "market": "Paola Marquez", "dm": "Paola Marquez", "pos": "ABO", "mid": "18013367225906", "client": "Paola Marquez"}, {"store": 339, "name": "West Ashlan", "market": "Paola Marquez", "dm": "Paola Marquez", "pos": "ABO", "mid": "18058118225905", "client": "Paola Marquez"}, {"store": 344, "name": "Madera Ave", "market": "Paola Marquez", "dm": "Paola Marquez", "pos": "ABO", "mid": "18089423225910", "client": "Paola Marquez"}, {"store": 324, "name": "Shields", "market": "Paola Marquez", "dm": "Paola Marquez", "pos": "ABO", "mid": "18071757225895", "client": "Paola Marquez"}, {"store": 107, "name": "Turlock", "market": "Jocelyn Espinoza", "dm": "Jocelyn", "pos": "ABO", "mid": "18047130225804", "client": "Jocelyn Espinoza"}, {"store": 184, "name": "Modesto", "market": "Jocelyn Espinoza", "dm": "Jocelyn", "pos": "ABO", "mid": "18055909225831", "client": "Jocelyn Espinoza"}, {"store": 240, "name": "Golden State", "market": "Jocelyn Espinoza", "dm": "Jocelyn", "pos": "ABO", "mid": "18017438225822", "client": "Jocelyn Espinoza"}, {"store": 243, "name": "Patterson", "market": "Jocelyn Espinoza", "dm": "Jocelyn", "pos": "ABO", "mid": "18068850225820", "client": "Jocelyn Espinoza"}, {"store": 302, "name": "McHenry", "market": "Jocelyn Espinoza", "dm": "Jocelyn", "pos": "ABO", "mid": "18080810225883", "client": "Jocelyn Espinoza"}, {"store": 351, "name": "Manteca", "market": "Jocelyn Espinoza", "dm": "Jocelyn", "pos": "ABO", "mid": "18063412225914", "client": "Jocelyn Espinoza"}, {"store": 108, "name": "MOONEY", "market": "Altagracia Valenzuela", "dm": "Altagracia Valenzuela", "pos": "ABO", "mid": "18032227225956", "client": "Altagracia Valenzuela"}, {"store": 125, "name": "Huron", "market": "Altagracia Valenzuela", "dm": "Altagracia Valenzuela", "pos": "ABO", "mid": "18088818225870", "client": "Altagracia Valenzuela"}, {"store": 244, "name": "Caolinga", "market": "Altagracia Valenzuela", "dm": "Altagracia Valenzuela", "pos": "ABO", "mid": "18060933225819", "client": "Altagracia Valenzuela"}, {"store": 246, "name": "Avenal", "market": "Altagracia Valenzuela", "dm": "Altagracia Valenzuela", "pos": "ABO", "mid": "18017252225841", "client": "Altagracia Valenzuela"}, {"store": 466, "name": "Lacey Blvd", "market": "Altagracia Valenzuela", "dm": "Altagracia Valenzuela", "pos": "ABO", "mid": "180490782384378", "client": "Altagracia Valenzuela"}, {"store": 467, "name": "Lemoore", "market": "Altagracia Valenzuela", "dm": "Altagracia Valenzuela", "pos": "ABO", "mid": "180851392384410", "client": "Altagracia Valenzuela"}, {"store": 470, "name": "Hanford", "market": "Altagracia Valenzuela", "dm": "Altagracia Valenzuela", "pos": "ABO", "mid": "180268292381135", "client": "Altagracia Valenzuela"}, {"store": 479, "name": "Cellular & Paging Communications- 294 E Cross Ave", "market": "Altagracia Valenzuela", "dm": "Altagracia Valenzuela", "pos": "ABO", "mid": "180988402408664", "client": "Altagracia Valenzuela"}, {"store": 481, "name": "Tulare", "market": "Altagracia Valenzuela", "dm": "Altagracia Valenzuela", "pos": "ABO", "mid": "180978522408714", "client": "Altagracia Valenzuela"}, {"store": 346, "name": "Petaluma", "market": "Mohammed Alamrani", "dm": "Muaamar Alagi", "pos": "ABO", "mid": "18095755225911", "client": "Mohammed Alamrani"}, {"store": 347, "name": "Santa Rosa", "market": "Mohammed Alamrani", "dm": "Muaamar Alagi", "pos": "ABO", "mid": "18098555225912", "client": "Mohammed Alamrani"}, {"store": 366, "name": "San Fran Mission", "market": "Mohammed Alamrani", "dm": "Gabriel Jorge Marques", "pos": "ABO", "mid": "18058999225930", "client": "Mohammed Alamrani"}, {"store": 383, "name": "Daly City", "market": "Mohammed Alamrani", "dm": "Gabriel Jorge Marques", "pos": "ABO", "mid": "18025956225940", "client": "Mohammed Alamrani"}, {"store": 395, "name": "4489 Mission", "market": "Mohammed Alamrani", "dm": "Gabriel Jorge Marques", "pos": "ABO", "mid": "18082677225941", "client": "Mohammed Alamrani"}, {"store": 396, "name": "San Bruno", "market": "Mohammed Alamrani", "dm": "Gabriel Jorge Marques", "pos": "ABO", "mid": "18090138225942", "client": "Mohammed Alamrani"}, {"store": 420, "name": "San Rafael", "market": "Mohammed Alamrani", "dm": "Muaamar Alagi", "pos": "ABO", "mid": "18087926225948", "client": "Mohammed Alamrani"}, {"store": 454, "name": "Mission Street San Francisco", "market": "Mohammed Alamrani", "dm": "Gabriel Jorge Marques", "pos": "ABO", "mid": "180199342308690", "client": "Mohammed Alamrani"}, {"store": 457, "name": "South San Francisco", "market": "Mohammed Alamrani", "dm": "Gabriel Jorge Marques", "pos": "ABO", "mid": "180787822316834", "client": "Mohammed Alamrani"}, {"store": 260, "name": "San Pablo", "market": "Mohammed Alamrani", "dm": "Maria", "pos": "ABO", "mid": "18073774225829", "client": "Mohammed Alamrani"}, {"store": 284, "name": "East San Leandro", "market": "Mohammed Alamrani", "dm": "Maria", "pos": "ABO", "mid": "18022318225855", "client": "Mohammed Alamrani"}, {"store": 369, "name": "Bedford Plaza", "market": "Mohammed Alamrani", "dm": "Maria", "pos": "ABO", "mid": "18028390225933", "client": "Mohammed Alamrani"}, {"store": 435, "name": "Parkway", "market": "Mohammed Alamrani", "dm": "Maria", "pos": "ABO", "mid": "180508732301158", "client": "Mohammed Alamrani"}, {"store": 459, "name": "Fairfield Eureka", "market": "Mohammed Alamrani", "dm": "Muaamar", "pos": "ABO", "mid": "180984862339596", "client": "Mohammed Alamrani"}, {"store": 464, "name": "Clearlake", "market": "Mohammed Alamrani", "dm": "Muaamar", "pos": "ABO", "mid": "180389752382810", "client": "Mohammed Alamrani"}, {"store": 273, "name": "Ukiah", "market": "Mohammed Alamrani", "dm": "Muaamar", "pos": "ABO", "mid": "18025962225827", "client": "Mohammed Alamrani"}, {"store": 475, "name": "Southwest Rohnert Park", "market": "Mohammed Alamrani", "dm": "Muaamar", "pos": "ABO", "mid": "180754902404077", "client": "Mohammed Alamrani"}, {"store": 401, "name": "Lakeport", "market": "Mohammed Alamrani", "dm": "Muaamar", "pos": "ABO", "mid": "18091780225944", "client": "Mohammed Alamrani"}, {"store": 275, "name": "San Jose", "market": "Mohammed Alamrani", "dm": "Andrea Elias", "pos": "ABO", "mid": "18090842225826", "client": "Mohammed Alamrani"}, {"store": 277, "name": "San Mateo", "market": "Mohammed Alamrani", "dm": "Gabriel Jorge Marques", "pos": "ABO", "mid": "180132262258481", "client": "Mohammed Alamrani"}, {"store": 297, "name": "Monterey Rd", "market": "Mohammed Alamrani", "dm": "Andrea Elias", "pos": "ABO", "mid": "18090190225854", "client": "Mohammed Alamrani"}, {"store": 317, "name": "East Palo Alto", "market": "Mohammed Alamrani", "dm": "Andrea Elias", "pos": "ABO", "mid": "18064071225894", "client": "Mohammed Alamrani"}, {"store": 463, "name": "La Plaza Market", "market": "Mohammed Alamrani", "dm": "Andrea Elias", "pos": "ABO", "mid": "180517902366649", "client": "Mohammed Alamrani"}, {"store": 455, "name": "Willow St", "market": "Mohammed Alamrani", "dm": "Andrea Elias", "pos": "ABO", "mid": "180517542360626", "client": "Mohammed Alamrani"}, {"store": 462, "name": "Sunnyvale", "market": "Mohammed Alamrani", "dm": "Andrea Elias", "pos": "ABO", "mid": "180733102363943", "client": "Mohammed Alamrani"}, {"store": 473, "name": "NSB_Spacetel - 915 Geneva Ave", "market": "Mohammed Alamrani", "dm": "Gabriel Jorge Marques", "pos": "ABO", "mid": "180328212392611", "client": "Mohammed Alamrani"}, {"store": 474, "name": "Relo_Spacetel_3200 International Blvd", "market": "Mohammed Alamrani", "dm": "Maria Rodriguez", "pos": "ABO", "mid": "180450682397180", "client": "Mohammed Alamrani"}, {"store": 252, "name": "Independence", "market": "Dalia Hernandez", "dm": "Dalia Hernandez", "pos": "ABO", "mid": "18021099225839", "client": "Dalia Hernandez"}, {"store": 286, "name": "Woodburn", "market": "Dalia Hernandez", "dm": "Dalia Hernandez", "pos": "ABO", "mid": "18077314225857", "client": "Dalia Hernandez"}, {"store": 287, "name": "Mount Hood", "market": "Dalia Hernandez", "dm": "Dalia Hernandez", "pos": "ABO", "mid": "18048040225850", "client": "Dalia Hernandez"}];
+</script>
+<script>
+(() => {
+const $ = s => document.querySelector(s);
+const E = RecEngine; const money = E.money, md = E.md;
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const LS = { get(k){ try { return JSON.parse(localStorage.getItem(k)); } catch(e){ return null; } }, set(k,v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} } };
+let master = LS.get('spc-master') || BUILTIN_MASTER;
+master.forEach(s => s.pos = 'ABO');
+let auditFiles = [], bankFile = null, RES = null, market = 'ALL', notes = {};
+const STATUS_LABEL = { matched:'Matched', timing:'Timing', boundary:'Carry-in', exception:'Review' };
+
+function setMasterNote(){
+  const mk = new Set(master.map(s => s.market)).size;
+  $('#masterNote').innerHTML = `Using ${master.length} stores across ${mk} markets${master === BUILTIN_MASTER ? ' (from your August workbook)' : ' (loaded from a workbook)'}. <button id="lnkStores">See or update the store list</button>`;
+  $('#lnkStores').onclick = showStores;
+}
+setMasterNote();
+
+// ---------- file intake ----------
+function wireDrop(zone, input, onFiles){
+  input.addEventListener('change', () => onFiles([...input.files]));
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('over'));
+  zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('over'); onFiles([...e.dataTransfer.files]); });
+}
+wireDrop($('#dropAudit'), $('#inAudit'), fs => { auditFiles = fs; $('#fileAudit').textContent = fs.map(f => f.name).join(', '); $('#dropAudit').classList.toggle('ready', fs.length > 0); ready(); });
+wireDrop($('#dropBank'), $('#inBank'), fs => { bankFile = fs[0]; $('#fileBank').textContent = bankFile ? bankFile.name : ''; $('#dropBank').classList.toggle('ready', !!bankFile); ready(); });
+function ready(){ $('#btnRun').disabled = !(auditFiles.length && bankFile); }
+const tick = () => new Promise(r => setTimeout(r, 30));
+async function readRows(file, preferSheet){
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type:'array', dense:true, cellDates:false, cellFormula:false, cellHTML:false, cellText:false });
+  let name = wb.SheetNames.find(n => preferSheet && preferSheet.test(n)) || wb.SheetNames[0];
+  // pick the largest sheet if the preferred one is missing
+  if (!preferSheet || !preferSheet.test(name)) { let best = 0; for (const n of wb.SheetNames) { const r = XLSX.utils.decode_range(wb.Sheets[n]['!ref'] || 'A1'); if (r.e.r > best) { best = r.e.r; name = n; } } }
+  return XLSX.utils.sheet_to_json(wb.Sheets[name], { header:1, raw:true, defval:null, blankrows:false });
+}
+$('#btnRun').onclick = async () => {
+  if (typeof XLSX === 'undefined') { $('#runStatus').textContent = 'The spreadsheet reader did not load. Check your connection and reload the page.'; return; }
+  $('#btnRun').disabled = true; const st = $('#runStatus');
+  try {
+    let auditRows = [];
+    for (const f of auditFiles) { st.textContent = `Reading ${f.name}…`; await tick(); const rows = await readRows(f, /report output/i); auditRows = auditRows.length ? auditRows.concat(rows.slice(1)) : rows; }
+    st.textContent = `Reading ${bankFile.name}…`; await tick();
+    const bankRows = await readRows(bankFile);
+    st.textContent = 'Matching card sales to deposits…'; await tick();
+    const t0 = performance.now();
+    RES = E.reconcile({ auditRows, bankRows, master });
+    RES.seconds = ((performance.now() - t0) / 1000).toFixed(1);
+    notes = LS.get('spc-notes-' + RES.month) || {};
+    st.textContent = '';
+    showResults();
+  } catch (e) { st.textContent = e.message || String(e); console.error(e); }
+  $('#btnRun').disabled = false;
+};
+
+// ---------- results ----------
+function showResults(){
+  $('#intake').classList.add('hidden'); $('#storesView').classList.add('hidden'); $('#results').classList.remove('hidden');
+  ['#btnNew','#btnExport','#btnStores'].forEach(s => $(s).classList.remove('hidden'));
+  const [y, m] = RES.month.split('-');
+  $('#monthLabel').classList.remove('hidden');
+  $('#monthLabel').textContent = new Date(Date.UTC(+y, +m - 1, 1)).toLocaleString('en-US', { month:'long', year:'numeric', timeZone:'UTC' });
+  const c = { matched:0, timing:0, boundary:0, exception:0 }; let H = 0, I = 0, exStores = 0;
+  let UN = 0; RES.stores.forEach(s => { Object.keys(c).forEach(k => c[k] += s.counts[k]); H += s.H; I += s.I; UN += s.unexplained; if (s.counts.exception) exStores++; }); UN = E.r2(UN);
+  const total = RES.stores.length * RES.days.length;
+  const bankItems = RES.stores.reduce((a, s) => a + s.otherItems.filter(o => o.kind !== 'DISC').length, 0);
+  $('#strip').innerHTML = `
+    <div><div class="v">${RES.stores.length}</div><div class="l">stores, ${total.toLocaleString()} store-days</div></div>
+    <div class="ok"><div class="v">${c.matched.toLocaleString()}</div><div class="l">days matched exactly</div></div>
+    <div class="tm"><div class="v">${(c.timing + c.boundary).toLocaleString()}</div><div class="l">differences explained with comments</div></div>
+    <div class="ex"><div class="v">${c.exception}</div><div class="l">days to review in ${exStores} store${exStores === 1 ? '' : 's'}</div></div>
+    <div><div class="v">${bankItems}</div><div class="l">chargebacks, adjustments, holds</div></div>
+    <div><div class="v" style="color:${Math.abs(UN) >= .01 ? 'var(--ex)' : 'var(--ok)'}">${money(UN)}</div><div class="l">net unexplained, on ${money(H).replace(/\.\d+$/,'')} card sales</div></div>`;
+  const w = [...RES.warnings];
+  if (RES.unknownMids.length) w.push(`${RES.unknownMids.length} merchant ID(s) in the bank file are not on the store list and were left out (${RES.unknownMids.map(u => u.mid).join(', ')}).`);
+  $('#warnings').innerHTML = w.map(x => `<div class="warn">${esc(x)}</div>`).join('');
+  renderMarkets(); renderGrid(); renderQueue();
+}
+function marketsList(){
+  const m = new Map();
+  RES.stores.forEach(s => { const x = m.get(s.market) || { name:s.market, n:0, ex:0 }; x.n++; if (s.counts.exception || s.otherItems.some(o => o.kind !== 'DISC')) x.ex++; m.set(s.market, x); });
+  return [...m.values()];
+}
+function renderMarkets(){
+  const ms = marketsList(); const exAll = ms.reduce((a, x) => a + x.ex, 0);
+  $('#markets').innerHTML = `<h3>Markets</h3>` + [{ name:'ALL', label:'All markets', n:RES.stores.length, ex:exAll }, ...ms].map(x =>
+    `<button aria-pressed="${market === x.name}" data-m="${esc(x.name)}">${esc(x.label || x.name)}${x.ex ? ` <span class="badge" title="stores with items to review">${x.ex}</span>` : ''}<span class="n">${x.n}</span></button>`).join('');
+  $('#markets').querySelectorAll('button').forEach(b => b.onclick = () => { market = b.dataset.m; renderMarkets(); renderGrid(); renderQueue(); });
+}
+function visibleStores(){
+  let ss = RES.stores.filter(s => market === 'ALL' || s.market === market);
+  if ($('#onlyEx').checked) ss = ss.filter(s => s.counts.exception || s.otherItems.some(o => o.kind !== 'DISC'));
+  return ss;
+}
+$('#onlyEx').onchange = () => renderGrid();
+function renderGrid(){
+  $('#mxTitle').textContent = market === 'ALL' ? 'All markets' : market;
+  $('#btnExport').textContent = market === 'ALL' ? 'Export Excel' : 'Export this market';
+  const days = RES.days;
+  const dow = d => new Date(d + 'T00:00:00Z').getUTCDay();
+  let h = `<thead><tr><th style="text-align:left;padding-left:12px">Store</th>${days.map(d => `<th class="${[0,6].includes(dow(d)) ? 'we' : ''}" title="${d}">${+d.slice(8)}</th>`).join('')}<th style="text-align:right;padding-right:12px">Open</th></tr></thead><tbody>`;
+  let cur = null;
+  for (const s of visibleStores()) {
+    if (s.market !== cur) { cur = s.market; h += `<tr class="mk"><td colspan="${days.length + 2}">${esc(cur)}</td></tr>`; }
+    h += `<tr class="st" data-s="${s.store}"><td class="nm" title="${esc(s.name)}"><b>${s.store}</b>${esc(s.name)}</td>`;
+    s.rows.forEach((r, i) => { const cls = r.status === 'matched' && r.H === 0 && r.I === 0 ? 'zero' : r.status; h += `<td class="c s-${cls}" data-i="${i}"><span></span></td>`; });
+    const open = s.unexplained; h += `<td class="net ${Math.abs(open) >= 0.01 ? 'bad' : ''}">${Math.abs(open) >= 0.01 ? money(open) : '–'}</td></tr>`;
+  }
+  $('#grid').innerHTML = h + '</tbody>';
+  $('#grid').querySelectorAll('tr.st').forEach(tr => tr.onclick = e => { const td = e.target.closest('td.c'); openStore(+tr.dataset.s, td ? +td.dataset.i : null); });
+}
+const tip = $('#tip');
+$('#grid').addEventListener('mousemove', e => {
+  const td = e.target.closest('td.c'); if (!td) { tip.style.display = 'none'; return; }
+  const s = RES.stores.find(x => x.store == td.parentElement.dataset.s); const r = s.rows[+td.dataset.i];
+  tip.innerHTML = `<b>${s.store} ${esc(s.name)}, ${md(r.date)}</b><br>Card ${money(r.H)} · Bank ${money(r.I)} · Diff ${money(r.J)}<br>${STATUS_LABEL[r.status]}${r.comment ? ': ' + esc(r.comment) : ''}`;
+  tip.style.display = 'block';
+  const x = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8), y = Math.min(e.clientY + 14, innerHeight - tip.offsetHeight - 8);
+  tip.style.left = x + 'px'; tip.style.top = y + 'px';
+});
+$('#grid').addEventListener('mouseleave', () => tip.style.display = 'none');
+
+function renderQueue(){
+  const ss = RES.stores.filter(s => market === 'ALL' || s.market === market);
+  const ex = []; ss.forEach(s => s.rows.forEach((r, i) => { if (r.status === 'exception') ex.push({ s, r, i }); }));
+  ex.sort((a, b) => Math.abs(b.r.resid) - Math.abs(a.r.resid));
+  const bi = []; ss.forEach(s => s.otherItems.filter(o => o.kind !== 'DISC').forEach(o => bi.push({ s, o })));
+  const KN = { CHBK:'Chargeback', ADJ:'Adjustment', REL:'Held funds released' };
+  let h = `<h3>To review</h3>`;
+  h += `<div class="sec">Unexplained differences (${ex.length})</div>`;
+  h += ex.length ? ex.map(({ s, r, i }) => `<div class="item" data-s="${s.store}" data-i="${i}"><div class="h"><span>${s.store} ${esc(s.name)}</span><span>${md(r.date)}</span><span class="amt ${r.resid < 0 ? 'neg' : ''}">${money(r.resid)}</span></div><div class="c">${esc(r.comment)}</div></div>`).join('') : `<div class="empty">Nothing unexplained in this selection.</div>`;
+  h += `<div class="sec">Bank items (${bi.length})</div>`;
+  h += bi.length ? bi.map(({ s, o }) => `<div class="item" data-s="${s.store}"><div class="h"><span>${s.store} ${esc(s.name)}</span><span>${md(o.asof)}</span><span class="amt ${o.amt < 0 ? 'neg' : ''}">${money(o.amt)}</span></div><div class="c">${KN[o.kind] || o.kind}, kept out of the daily bank column</div></div>`).join('') : `<div class="empty">No chargebacks or adjustments.</div>`;
+  $('#queue').innerHTML = h;
+  $('#queue').querySelectorAll('.item').forEach(el => el.onclick = () => openStore(+el.dataset.s, el.dataset.i != null ? +el.dataset.i : null));
+}
+
+// ---------- store drawer ----------
+function openStore(id, focusIdx){
+  const s = RES.stores.find(x => x.store === id);
+  $('#dTitle').textContent = `${s.store}: ${s.name}`;
+  $('#dMeta').textContent = `${s.market} market, DM ${s.dm}, merchant ID ${s.mid}, batch cut-off ${E.clock(s.cutoff)}`;
+  const tot = `<div class="totals">
+    <div>Debit<b>${money(s.F)}</b></div><div>Credit<b>${money(s.G)}</b></div><div>Card total<b>${money(s.H)}</b></div>
+    <div>Bank<b>${money(s.I)}</b></div><div>Difference<b>${money(s.J)}</b></div>
+    <div>Unexplained<b style="color:${Math.abs(s.unexplained) >= .01 ? 'var(--ex)' : 'var(--ok)'}">${money(s.unexplained)}</b></div>
+    ${s.boundaryIn ? `<div>Prior-month carry-in<b>${money(s.boundaryIn)}</b></div>` : ''}${s.carryOut ? `<div>Settles next month<b>${money(s.carryOut)}</b></div>` : ''}</div>`;
+  const rows = s.rows.map((r, i) => {
+    const key = s.store + '|' + r.date;
+    const late = [...r.lateOutList.map(t => ({ ...t, dir:'to next day' })), ...r.lateInList.map(t => ({ ...t, dir:'from previous day' }))];
+    const txd = (late.length && r.status !== 'matched') ? `<details class="tx"><summary>${late.length} after-cut-off sale${late.length > 1 ? 's' : ''}</summary><table>${late.map(t => `<tr><td>${md(t.iso)} ${E.clock(t.mins)}</td><td>${money(t.amt)}</td><td>${esc(t.txn)}</td><td>${esc(t.user)}</td><td>${t.dir}</td></tr>`).join('')}</table></details>` : '';
+    const showNote = r.status === 'exception' || notes[key];
+    return `<tr class="r-${r.status}" id="row-${i}"><td>${md(r.date)}</td><td>${money(r.F)}</td><td>${money(r.G)}</td><td>${money(r.H)}</td><td>${money(r.I)}</td><td class="${Math.abs(r.J) >= .01 ? (r.status === 'exception' ? 'amt neg' : '') : ''}">${Math.abs(r.J) < .01 ? '–' : money(r.J)}</td>
+      <td class="l"><span class="pill p-${r.status}">${STATUS_LABEL[r.status]}</span></td>
+      <td class="cm">${esc(r.comment)}${txd}${showNote ? `<textarea data-k="${esc(key)}" placeholder="Reviewer note (goes into the Excel comment)">${esc(notes[key] || '')}</textarea>` : ''}</td></tr>`;
+  }).join('');
+  const KN = { CHBK:'Chargeback', ADJ:'Adjustment', REL:'Held funds released', DISC:'Monthly processing fee' };
+  const items = s.otherItems.length ? `<div class="bankitems"><h4>Other merchant items in the bank file</h4><table>${s.otherItems.map(o => `<tr><td>${md(o.asof)}</td><td>${KN[o.kind] || o.kind}</td><td class="amt ${o.amt < 0 ? 'neg' : ''}">${money(o.amt)}</td><td class="muted">${esc(o.desc)}</td></tr>`).join('')}</table></div>` : '';
+  $('#dBody').innerHTML = tot + `<div style="overflow-x:auto"><table class="days"><thead><tr><th>Date</th><th>Debit</th><th>Credit</th><th>Card total</th><th>Bank</th><th>Diff</th><th class="l">Status</th><th class="l">Comment</th></tr></thead><tbody>${rows}</tbody></table></div>` + items;
+  $('#dBody').querySelectorAll('textarea').forEach(t => t.oninput = () => { notes[t.dataset.k] = t.value; LS.set('spc-notes-' + RES.month, notes); });
+  $('#drawer').classList.add('open'); $('#scrim').classList.add('open'); $('#drawer').setAttribute('aria-hidden', 'false');
+  $('#dBody').scrollTop = 0;
+  if (focusIdx != null) { const el = document.getElementById('row-' + focusIdx); if (el) setTimeout(() => el.scrollIntoView({ block:'center' }), 60); }
+  $('#dClose').focus();
+}
+function closeDrawer(){ $('#drawer').classList.remove('open'); $('#scrim').classList.remove('open'); $('#drawer').setAttribute('aria-hidden', 'true'); }
+$('#dClose').onclick = closeDrawer; $('#scrim').onclick = closeDrawer;
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+
+$('#btnNew').onclick = () => { $('#results').classList.add('hidden'); $('#storesView').classList.add('hidden'); $('#intake').classList.remove('hidden'); ['#btnNew','#btnExport','#btnStores'].forEach(s => $(s).classList.add('hidden')); };
+
+// ---------- store list ----------
+function showStores(){
+  $('#intake').classList.add('hidden'); $('#results').classList.add('hidden'); $('#storesView').classList.remove('hidden');
+  $('#btnNew').classList.remove('hidden');
+  $('#storesCount').textContent = `${master.length} stores`;
+  $('#storesTable').innerHTML = `<thead><tr><th>Store</th><th>Name</th><th>Market</th><th>District Manager</th><th>Name on client summary</th><th>Merchant ID</th></tr></thead><tbody>` +
+    master.map(s => `<tr><td>${s.store}</td><td>${esc(s.name)}</td><td>${esc(s.market)}</td><td>${esc(s.dm)}</td><td>${esc(s.client || s.market)}</td><td>${esc(s.mid)}</td></tr>`).join('') + '</tbody>';
+}
+$('#btnStores').onclick = showStores;
+$('#btnLoadMaster').onclick = () => $('#inMaster').click();
+$('#btnTemplate').onclick = async () => {
+  const b = $('#btnTemplate'); const label = b.textContent;
+  if (typeof ExcelJS === 'undefined') { b.textContent = 'Excel writer did not load'; setTimeout(() => b.textContent = label, 2500); return; }
+  if (!downloads && window.claude && window.claude.use) { b.textContent = 'Saving files is not available here'; setTimeout(() => b.textContent = label, 2500); return; }
+  try { const wb = new ExcelJS.Workbook(); addStoreListSheet(wb, master); const buf = await wb.xlsx.writeBuffer();
+    await saveFile(new Blob([buf], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), 'Spacetel_Store_List.xlsx'); b.textContent = 'Saved'; }
+  catch (e) { b.textContent = e && e.code === 'declined' ? 'Not saved' : 'Could not save'; console.error(e); }
+  setTimeout(() => b.textContent = label, 2200);
+};
+$('#btnResetMaster').onclick = () => { master = BUILTIN_MASTER; try { localStorage.removeItem('spc-master'); } catch(e){} setMasterNote(); showStores(); };
+$('#inMaster').onchange = async () => {
+  const f = $('#inMaster').files[0]; if (!f) return;
+  const wb = XLSX.read(await f.arrayBuffer(), { type:'array' }); const sheets = {};
+  [...wb.SheetNames].sort((x, y) => (/store list/i.test(y) ? 1 : 0) - (/store list/i.test(x) ? 1 : 0)).forEach(n => sheets[n] = XLSX.utils.sheet_to_json(wb.Sheets[n], { header:1, raw:true, defval:null }));
+  const msg = $('#masterMsg'); let m, problems = [];
+  const sl = E.masterFromStoreList(sheets);
+  if (sl && sl.list.length) { m = sl.list; problems = sl.problems; } else m = E.masterFromRecon(sheets);
+  $('#inMaster').value = '';
+  if (!m || !m.length) { msg.innerHTML = `<div class="warn">No stores were found in ${esc(f.name)}. Use the Store list template (columns Store #, Store name, Market, District Manager, Name on client summary, Merchant ID).</div>`; return; }
+  const before = new Set(master.map(s => s.store)), after = new Set(m.map(s => s.store));
+  const added = m.filter(s => !before.has(s.store)).map(s => s.store), removed = master.filter(s => !after.has(s.store)).map(s => s.store);
+  master = m; LS.set('spc-master', m); setMasterNote(); showStores();
+  $('#masterMsg').innerHTML = `<div class="warn">Loaded ${m.length} stores from ${esc(f.name)}. ${added.length ? 'Added: ' + added.join(', ') + '. ' : ''}${removed.length ? 'Removed: ' + removed.join(', ') + '. ' : ''}${!added.length && !removed.length ? 'Same stores as before. ' : ''}${problems.length ? '<br>Skipped rows: ' + problems.map(esc).join('; ') : ''}<br>This list is saved in this browser. Each team member loads it once on their own computer. Run the reconciliation again to use it.</div>`;
+};
+
+// ---------- Excel export (same layout as the team workbook) ----------
+let downloads = null;
+if (window.claude && window.claude.use) window.claude.use('downloads').then(d => { downloads = d; }).catch(() => {});
+$('#btnExport').onclick = async () => {
+  const btn = $('#btnExport'); const label = btn.textContent;
+  const standalone = !(window.claude && window.claude.use);
+  if (!downloads && !standalone) { btn.textContent = 'Saving files is not available here'; setTimeout(() => btn.textContent = label, 2500); return; }
+  if (typeof ExcelJS === 'undefined') { btn.textContent = 'Excel writer did not load'; setTimeout(() => btn.textContent = label, 2500); return; }
+  btn.textContent = 'Building workbook…'; btn.disabled = true;
+  try {
+    const blob = await buildWorkbook();
+    const [y, m] = RES.month.split('-');
+    const mon = new Date(Date.UTC(+y, +m - 1, 1)).toLocaleString('en-US', { month:'short', timeZone:'UTC' });
+    const fname = `Spacetel_Card_Reconciliation_${mon}_${y.slice(2)}${market === 'ALL' ? '' : '_' + market.replace(/[^\w]+/g, '_')}.xlsx`;
+    await saveFile(blob, fname);
+    btn.textContent = 'Saved';
+  } catch (e) { btn.textContent = e && e.code === 'declined' ? 'Not saved' : 'Export failed'; console.error(e); }
+  setTimeout(() => { btn.textContent = label; btn.disabled = false; }, 2200);
+};
+async function buildWorkbook(){
+  const wb = new ExcelJS.Workbook(); wb.creator = 'Spacetel card reconciliation app'; wb.created = new Date(); wb.calcProperties = { fullCalcOnLoad:true };
+  const V = x => (x && typeof x === 'object' && 'result' in x) ? (+x.result || 0) : (typeof x === 'number' ? x : 0);
+  // ---- theme (matches the team workbook: Calibri 12, centred, thin borders, Office accent fills) ----
+  const C = { navy:'FF1F2A44', steel:'FF34557A', teal:'FF0E7C7B', ice:'FFEEF3F8', ice2:'FFDCE6F0', sub:'FFE9EFF6', weekend:'FFF6F8FB',
+    mint:'FFE3F2EA', okInk:'FF1B6B45', amber:'FFFFF2D3', carryInk:'FF8A5A00', coral:'FFFBE1DE', reviewInk:'FFA3261B',
+    ink:'FF1F2A44', muted:'FF5B6B7F', line:'FFD3DAE3', white:'FFFFFFFF',
+    timing:'FFE3F2EA', carry:'FFFFF2D3', review:'FFFBE1DE', grey:'FFEEF3F8', orange:'FF0E7C7B' };
+  const font = (o = {}) => ({ name:'Calibri', size:12, ...o });
+  const fill = c => ({ type:'pattern', pattern:'solid', fgColor:{ argb:c } });
+  const thin = { style:'thin', color:{ argb:C.line } };
+  const BOX = { top:thin, bottom:thin, left:thin, right:thin };
+  const USD = '"$"#,##0.00_);[Red]\\("$"#,##0.00\\)';
+  const USD0 = '"$"#,##0_);[Red]\\("$"#,##0\\)';
+  const PCT = '0.0%';
+  const CENTER = { horizontal:'center', vertical:'middle' };
+  const qn = n => `'${n.replace(/'/g, "''")}'`;
+  const colL = n => { let s = ''; while (n) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = (n - m - 1) / 26; } return s; };
+  const KN = { CHBK:'Chargeback', ADJ:'Adjustment', REL:'Held funds released' };
+  const [Y, M] = RES.month.split('-').map(Number);
+  const monthStart = new Date(Date.UTC(Y, M - 1, 1)); const nD = RES.days.length;
+  const monthName = monthStart.toLocaleString('en-US', { month:'long', year:'numeric', timeZone:'UTC' });
+  const scope = RES.stores.filter(s => market === 'ALL' || s.market === market);
+  const mks = marketsList().filter(x => market === 'ALL' || x.name === market);
+  const sheetName = n => n.slice(0, 31).replace(/[\\\/\?\*\[\]:]/g, ' ');
+  const storeExplained = s => s.counts.timing + s.counts.boundary;
+  const bankItems = s => s.otherItems.filter(o => o.kind !== 'DISC');
+  const statusOf = s => s.counts.exception ? 'Review' : bankItems(s).length ? 'Bank item' : 'Clean';
+  const styleHeader = (row, from, to, bg = C.steel) => { for (let c = from; c <= to; c++) { const x = row.getCell(c); x.font = font({ bold:true, color:{ argb:C.white } }); x.fill = fill(bg); x.border = BOX; x.alignment = { ...CENTER, wrapText:true }; } };
+  const statusCell = (cell, st) => {
+    cell.value = st; cell.alignment = CENTER; cell.font = font({ bold:true, color:{ argb: st === 'Review' ? C.reviewInk : st === 'Clean' ? C.okInk : C.carryInk } });
+    cell.fill = fill(st === 'Review' ? C.review : st === 'Clean' ? C.mint : C.carry);
+  };
+
+  // sheets in final order; Summary and Store summary are filled after the market tabs exist
+  const cli = wb.addWorksheet('Client summary', { properties:{ tabColor:{ argb:C.navy } }, views:[{ showGridLines:false }] });
+  const sum = wb.addWorksheet('Summary', { properties:{ tabColor:{ argb:C.orange } }, views:[{ showGridLines:false }] });
+  const sto = wb.addWorksheet('Store summary', { properties:{ tabColor:{ argb:C.steel } }, views:[{ state:'frozen', ySplit:4, xSplit:3 }] });
+  const rev = wb.addWorksheet('To review', { properties:{ tabColor:{ argb:C.reviewInk } }, views:[{ state:'frozen', ySplit:3 }] });
+
+  // ================= market tabs (team layout) =================
+  const loc = new Map(); // store -> {sheet, sub}
+  for (const mk of mks) {
+    const ss = scope.filter(s => s.market === mk.name);
+    const nm = sheetName(mk.name);
+    const ws = wb.addWorksheet(nm, { properties:{ tabColor:{ argb: ss.some(s => s.counts.exception) ? C.reviewInk : C.okInk } }, views:[{ state:'frozen', ySplit:2 }] });
+    ws.pageSetup = { orientation:'landscape', fitToPage:true, fitToWidth:1, fitToHeight:0, margins:{ left:.3, right:.3, top:.4, bottom:.4, header:.2, footer:.2 } };
+    [5.3, 23.7, 17.3, 24, 14, 15, 15, 16, 15, 14, 62, 12].forEach((w, i) => ws.getColumn(i + 1).width = w);
+    const t = (a, v, f, al = CENTER) => { const c = ws.getCell(a); c.value = v; c.font = f; c.alignment = al; c.border = BOX; return c; };
+    t('B1', 'Store', font({ size:12, color:{ argb:C.muted } })).fill = fill(C.ice);
+    t('C1', 'Spacetel LLC', font({ size:14, bold:true, color:{ argb:C.white } })).fill = fill(C.navy);
+    ws.mergeCells('D1:E1'); const d1 = t('D1', monthStart, font({ size:22, bold:true, color:{ argb:C.white } })); d1.numFmt = 'mmm-yy'; d1.fill = fill(C.orange);
+    ws.mergeCells('F1:L1'); t('F1', 'CARD RECONCILIATION', font({ size:15, bold:true, color:{ argb:C.white } })).fill = fill(C.navy);
+    ws.getRow(1).height = 30;
+    const heads = ['District Manager', 'Location', 'Date', 'ABO Debit Card', 'ABO Credit Card', 'Total Card Amount', 'Bank ', 'Difference', 'Comments', 'Status'];
+    heads.forEach((h, i) => ws.getCell(2, 3 + i).value = h);
+    styleHeader(ws.getRow(2), 3, 4, C.navy); styleHeader(ws.getRow(2), 5, 12, C.steel); ws.getRow(2).height = 32;
+    let r = 3; const subRows = [];
+    for (const s of ss) {
+      const top = r, blockEnd = r + nD + 1, sub = blockEnd + 1;
+      for (let k = top; k <= sub; k++) {
+        const row = ws.getRow(k);
+        if (k <= blockEnd) { row.getCell(1).value = s.store; row.getCell(2).value = `${s.store}: Spacetel LLC - ${s.name}`; }
+        for (let c = 1; c <= 12; c++) { const x = row.getCell(c); x.font = c <= 2 ? font({ size:10, color:{ argb:C.muted } }) : font({ color:{ argb:C.ink } }); x.alignment = c === 2 ? { horizontal:'left', vertical:'middle' } : CENTER; x.border = BOX; }
+      }
+      ws.getCell(top, 3).value = s.dm; ws.getCell(top, 4).value = `${s.store}: Spacetel LLC - ${s.name}\n\n${s.mid}`;
+      ws.mergeCells(top, 3, blockEnd, 3); ws.mergeCells(top, 4, blockEnd, 4);
+      [3, 4].forEach(c => { const x = ws.getCell(top, c); x.font = font({ bold:true, color:{ argb:C.navy } }); x.fill = fill(C.ice); x.alignment = { ...CENTER, wrapText:true }; });
+      s.rows.forEach((d, i) => {
+        const rr = top + 1 + i, row = ws.getRow(rr);
+        const dt = new Date(Date.UTC(Y, M - 1, i + 1));
+        row.getCell(5).value = i === 0 ? { formula:'$D$1', result:monthStart } : { formula:`E${rr - 1}+1`, result:dt };
+        row.getCell(5).numFmt = 'd-mmm-yy'; row.getCell(5).font = font({ color:{ argb:C.muted } });
+        if ([0, 6].includes(dt.getUTCDay())) for (let c = 5; c <= 12; c++) row.getCell(c).fill = fill(C.weekend);
+        row.getCell(6).value = d.F; row.getCell(7).value = d.G;
+        row.getCell(8).value = { formula:`IFERROR(F${rr}+G${rr},"")`, result:d.H };
+        row.getCell(9).value = d.I;
+        row.getCell(10).value = { formula:`IFERROR(I${rr}-H${rr},"")`, result:d.J };
+        [6, 7, 8, 9, 10].forEach(c => row.getCell(c).numFmt = USD);
+        const note = notes[s.store + '|' + d.date];
+        const k = row.getCell(11); k.value = [d.comment, note && 'Note: ' + note].filter(Boolean).join(' | ') || null;
+        k.alignment = { horizontal:'left', vertical:'middle' }; k.font = font({ size:10 });
+        const L = row.getCell(12); L.value = Math.abs(d.J) < .01 ? null : STATUS_LABEL[d.status];
+        if (Math.abs(d.J) >= .01) {
+          if (d.status === 'timing') { row.getCell(10).fill = fill(C.timing); row.getCell(10).font = font({ color:{ argb:C.okInk } }); L.font = font({ color:{ argb:C.okInk } }); }
+          if (d.status === 'boundary') { row.getCell(10).fill = fill(C.carry); L.font = font({ color:{ argb:C.carryInk } }); }
+          if (d.status === 'exception') { [10, 11, 12].forEach(c => row.getCell(c).fill = fill(C.review)); L.font = font({ bold:true, color:{ argb:C.reviewInk } }); }
+        }
+      });
+      const SR = ws.getRow(sub);
+      SR.getCell(3).value = s.store; SR.getCell(4).value = s.store;
+      [['F', s.F], ['G', s.G], ['H', s.H], ['I', s.I], ['J', s.J]].forEach(([col, v]) => { const x = SR.getCell(col); x.value = { formula:`SUM(${col}${top}:${col}${blockEnd})`, result:v }; x.numFmt = USD; });
+      for (let c = 3; c <= 12; c++) { const x = SR.getCell(c); x.font = font({ bold:true, color:{ argb:C.navy } }); x.fill = fill(C.sub); x.border = { top:{ style:'thin', color:{ argb:C.steel } }, bottom:{ style:'thin', color:{ argb:C.steel } }, left:thin, right:thin }; }
+      const sk = SR.getCell(11);
+      sk.value = Math.abs(s.unexplained) >= .01 ? `Unexplained ${money(s.unexplained)}` : [s.boundaryIn ? `Carry-in from prior month ${money(s.boundaryIn)}` : '', s.carryOut ? `${money(s.carryOut)} settles next month` : ''].filter(Boolean).join('; ') || 'Reconciled';
+      sk.alignment = { horizontal:'left', vertical:'middle' };
+      statusCell(SR.getCell(12), statusOf(s));
+      subRows.push(sub); loc.set(s.store, { sheet:nm, sub });
+      r = sub + 1;
+    }
+    const gt = ws.getRow(r + 1); gt.height = 22;
+    gt.getCell(5).value = 'Market total';
+    for (let c = 5; c <= 10; c++) { const x = gt.getCell(c); x.font = font({ bold:true, color:{ argb:C.navy } }); x.alignment = CENTER; x.fill = fill(C.ice2); x.border = { top:{ style:'medium', color:{ argb:C.navy } }, bottom:{ style:'medium', color:{ argb:C.navy } }, left:thin, right:thin }; }
+    ['F', 'G', 'H', 'I', 'J'].forEach(col => { const x = gt.getCell(col); x.value = { formula:`SUM(${subRows.map(v => col + v).join(',')})`, result:E.r2(ss.reduce((a, s) => a + s[col], 0)) }; x.numFmt = USD; });
+  }
+
+  // ================= Store summary (linked to the market tabs) =================
+  {
+    const ws = sto;
+    const cols = [['Market', 22], ['Store', 8], ['Location', 30], ['District Manager', 22], ['Merchant ID', 18], ['Batch cut-off', 11],
+      ['ABO Debit', 14], ['ABO Credit', 14], ['Total Card', 15], ['Bank', 15], ['Difference', 14], ['Carry-in from prior month', 14], ['Settles next month', 14], ['Unexplained', 14],
+      ['Days matched', 10], ['Days explained', 10], ['Days to review', 10], ['Bank items', 9], ['Bank items $', 14], ['Match rate', 10], ['Status', 11]];
+    cols.forEach(([, w], i) => ws.getColumn(i + 1).width = w);
+    ws.mergeCells(1, 1, 1, cols.length);
+    const t = ws.getCell('A1'); t.value = `Store summary, ${monthName}`; t.font = font({ size:16, bold:true });
+    ws.mergeCells(2, 1, 2, cols.length);
+    const s2 = ws.getCell('A2'); s2.value = 'Card totals link to the subtotal rows on each market tab. Days explained = timing differences and prior-month carry-ins with an auto comment.'; s2.font = font({ size:10, italic:true, color:{ argb:'FF595959' } });
+    const hr = ws.getRow(4); cols.forEach(([h], i) => hr.getCell(i + 1).value = h); styleHeader(hr, 1, 6, C.navy); styleHeader(hr, 7, cols.length, C.steel); hr.height = 34;
+    let r = 5;
+    for (const s of scope) {
+      const L = loc.get(s.store); const ref = col => `${qn(L.sheet)}!${col}${L.sub}`;
+      const row = ws.getRow(r);
+      row.values = [s.market, s.store, s.name, s.dm, String(s.mid), E.clock(s.cutoff)];
+      [['G', 'F', s.F], ['H', 'G', s.G], ['I', 'H', s.H], ['J', 'I', s.I], ['K', 'J', s.J]].forEach(([c, src, v]) => row.getCell(c).value = { formula:ref(src), result:v });
+      row.getCell('L').value = s.boundaryIn; row.getCell('M').value = s.carryOut; row.getCell('N').value = s.unexplained;
+      row.getCell('O').value = s.counts.matched; row.getCell('P').value = storeExplained(s); row.getCell('Q').value = s.counts.exception;
+      row.getCell('R').value = bankItems(s).length; row.getCell('S').value = E.r2(bankItems(s).reduce((a, o) => a + o.amt, 0));
+      row.getCell('T').value = { formula:`IFERROR((O${r}+P${r})/(O${r}+P${r}+Q${r}),0)`, result:(s.counts.matched + storeExplained(s)) / nD };
+      for (let c = 1; c <= cols.length; c++) { const x = row.getCell(c); x.font = font({ size:11 }); x.border = BOX; x.alignment = c === 3 || c === 4 || c === 1 ? { horizontal:'left', vertical:'middle' } : CENTER; }
+      ['G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'S'].forEach(c => row.getCell(c).numFmt = USD);
+      row.getCell('T').numFmt = PCT;
+      if (Math.abs(s.unexplained) >= .01) { row.getCell('N').fill = fill(C.review); row.getCell('N').font = font({ size:11, bold:true, color:{ argb:C.reviewInk } }); }
+      if (s.counts.exception) row.getCell('Q').fill = fill(C.review);
+      if (s.boundaryIn) row.getCell('L').fill = fill(C.carry);
+      statusCell(row.getCell('U'), statusOf(s)); row.getCell('U').font = { ...row.getCell('U').font, size:11 };
+      r++;
+    }
+    const last = r - 1; const tr = ws.getRow(r + 1);
+    tr.getCell(1).value = 'Total';
+    const colSum = c => { let a = 0; for (let k = 5; k <= last; k++) a += V(ws.getCell(c + k).value); return E.r2(a); };
+    'GHIJKLMNOPQRS'.split('').forEach(c => { tr.getCell(c).value = { formula:`SUM(${c}5:${c}${last})`, result:colSum(c) }; });
+    const o = colSum('O'), p = colSum('P'), q = colSum('Q');
+    tr.getCell('T').value = { formula:`IFERROR((O${r + 1}+P${r + 1})/(O${r + 1}+P${r + 1}+Q${r + 1}),0)`, result:(o + p) / ((o + p + q) || 1) };
+    for (let c = 1; c <= cols.length; c++) { const x = tr.getCell(c); x.font = font({ size:11, bold:true, color:{ argb:C.navy } }); x.fill = fill(C.ice2); x.border = { top:{ style:'medium', color:{ argb:C.navy } }, bottom:{ style:'medium', color:{ argb:C.navy } }, left:thin, right:thin }; x.alignment = CENTER; }
+    ['G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'S'].forEach(c => tr.getCell(c).numFmt = USD); tr.getCell('T').numFmt = PCT;
+    ws.autoFilter = { from:{ row:4, column:1 }, to:{ row:last, column:cols.length } };
+    ws.pageSetup = { orientation:'landscape', fitToPage:true, fitToWidth:1, fitToHeight:0 };
+    sto.__last = last;
+  }
+  const SL = sto.__last; const SS = c => `${qn('Store summary')}!$${c}$5:$${c}$${SL}`;
+
+  // ================= To review =================
+  {
+    const ws = rev;
+    const cols = [['Market', 22], ['Store', 8], ['Location', 28], ['District Manager', 20], ['Date', 12], ['Type', 16], ['Card total', 14], ['Bank', 14], ['Amount', 14], ['What the app found', 70], ['Reviewer note', 40], ['Resolved?', 10]];
+    cols.forEach(([, w], i) => ws.getColumn(i + 1).width = w);
+    ws.mergeCells(1, 1, 1, cols.length); const t = ws.getCell('A1'); t.value = `Items to review, ${monthName}`; t.font = font({ size:16, bold:true });
+    const hr = ws.getRow(3); cols.forEach(([h], i) => hr.getCell(i + 1).value = h); styleHeader(hr, 1, cols.length, C.steel); hr.height = 30;
+    let r = 4;
+    const add = (vals, kind) => {
+      const row = ws.getRow(r); row.values = vals;
+      for (let c = 1; c <= cols.length; c++) { const x = row.getCell(c); x.font = font({ size:11 }); x.border = BOX; x.alignment = { vertical:'top', wrapText:c >= 10, horizontal:c >= 10 || c <= 4 ? 'left' : 'center' }; }
+      row.getCell(5).numFmt = 'd-mmm-yy'; [7, 8, 9].forEach(c => row.getCell(c).numFmt = USD);
+      row.getCell(6).fill = fill(kind === 'diff' ? C.review : C.carry);
+      row.getCell(12).dataValidation = { type:'list', allowBlank:true, formulae:['"Yes,No"'] };
+      r++;
+    };
+    const ex = []; scope.forEach(s => s.rows.forEach(d => { if (d.status === 'exception') ex.push({ s, d }); }));
+    ex.sort((a, b) => Math.abs(b.d.resid) - Math.abs(a.d.resid));
+    ex.forEach(({ s, d }) => add([s.market, s.store, s.name, s.dm, new Date(d.date + 'T00:00:00Z'), 'Unexplained difference', d.H, d.I, d.resid, d.comment, notes[s.store + '|' + d.date] || null, null], 'diff'));
+    scope.forEach(s => bankItems(s).forEach(o => add([s.market, s.store, s.name, s.dm, new Date(o.asof + 'T00:00:00Z'), KN[o.kind] || o.kind, null, o.amt, o.amt, o.desc, null, null], 'bank')));
+    if (r === 4) { ws.getCell('A4').value = 'Nothing to review this month.'; ws.getCell('A4').font = font({ italic:true }); }
+    ws.autoFilter = { from:{ row:3, column:1 }, to:{ row:Math.max(4, r - 1), column:cols.length } };
+    ws.pageSetup = { orientation:'landscape', fitToPage:true, fitToWidth:1, fitToHeight:0 };
+  }
+
+  // ================= Summary =================
+  {
+    const ws = sum;
+    [2, 26, 16, 16, 16, 16, 16, 16, 16, 16, 16, 11, 11, 11, 10, 12].forEach((w, i) => ws.getColumn(i + 1).width = w);
+    ws.pageSetup = { orientation:'landscape', fitToPage:true, fitToWidth:1, fitToHeight:0 };
+    // title band
+    ws.mergeCells('B1:H1'); const t1 = ws.getCell('B1'); t1.value = 'Spacetel LLC  |  Card Reconciliation'; t1.font = font({ size:20, bold:true, color:{ argb:C.white } }); t1.fill = fill(C.navy); t1.alignment = { vertical:'middle', indent:1 };
+    ws.mergeCells('I1:K1'); const t2 = ws.getCell('I1'); t2.value = monthStart; t2.numFmt = 'mmmm yyyy'; t2.font = font({ size:18, bold:true, color:{ argb:C.white } }); t2.fill = fill(C.orange); t2.alignment = CENTER;
+    ws.getRow(1).height = 38;
+    ws.mergeCells('B2:K2'); const t3 = ws.getCell('B2');
+    t3.value = `Scope: ${market === 'ALL' ? 'all markets' : market}.  ABO report ${md(RES.auditRange[0])}–${md(RES.auditRange[1])}, bank export ${md(RES.bankRange[0])}–${md(RES.bankRange[1])}.  Batch cut-off learned from the data: ${E.clock(RES.globalCut)}.  Generated ${new Date().toLocaleString('en-US')}.`;
+    t3.font = font({ size:10, italic:true, color:{ argb:'FF595959' } });
+
+    // KPI tiles: two rows of five, label above value
+    const tiles = [
+      ['Stores', { formula:`COUNTA(${SS('B')})`, result:scope.length }, '0'],
+      ['Store-days', { formula:`COUNTA(${SS('B')})*${nD}`, result:scope.length * nD }, '#,##0'],
+      ['Days matched exactly', { formula:`SUM(${SS('O')})`, result:scope.reduce((a, s) => a + s.counts.matched, 0) }, '#,##0', C.okInk],
+      ['Differences explained', { formula:`SUM(${SS('P')})`, result:scope.reduce((a, s) => a + storeExplained(s), 0) }, '#,##0'],
+      ['Days to review', { formula:`SUM(${SS('Q')})`, result:scope.reduce((a, s) => a + s.counts.exception, 0) }, '#,##0', C.reviewInk],
+      ['Total card sales (ABO)', { formula:`SUM(${SS('I')})`, result:E.r2(scope.reduce((a, s) => a + s.H, 0)) }, USD0],
+      ['Bank deposits', { formula:`SUM(${SS('J')})`, result:E.r2(scope.reduce((a, s) => a + s.I, 0)) }, USD0],
+      ['Difference', { formula:`SUM(${SS('K')})`, result:E.r2(scope.reduce((a, s) => a + s.J, 0)) }, USD],
+      ['Net unexplained', { formula:`SUM(${SS('N')})`, result:E.r2(scope.reduce((a, s) => a + s.unexplained, 0)) }, USD, C.reviewInk],
+      ['Match rate', { formula:`IFERROR((SUM(${SS('O')})+SUM(${SS('P')}))/(COUNTA(${SS('B')})*${nD}),0)`, result:scope.reduce((a, s) => a + s.counts.matched + storeExplained(s), 0) / ((scope.length * nD) || 1) }, PCT, C.okInk],
+    ];
+    const tileCols = [2, 4, 6, 8, 10];
+    tiles.forEach(([label, val, fmt, ink], i) => {
+      const rr = i < 5 ? 4 : 7; const c = tileCols[i % 5];
+      ws.mergeCells(rr, c, rr, c + 1); ws.mergeCells(rr + 1, c, rr + 1, c + 1);
+      const l = ws.getCell(rr, c); l.value = label; l.font = font({ size:10, color:{ argb:'FF595959' } }); l.alignment = { horizontal:'left', vertical:'bottom', indent:1 };
+      const v = ws.getCell(rr + 1, c); v.value = val; v.numFmt = fmt; v.font = font({ size:18, bold:true, color:{ argb:ink || C.ink } }); v.alignment = { horizontal:'left', vertical:'middle', indent:1 };
+      for (const x of [l, v]) { x.fill = fill(C.grey); }
+      ws.getCell(rr, c).border = { top:{ style:'medium', color:{ argb:ink || C.orange } } };
+    });
+    ws.getRow(5).height = 30; ws.getRow(8).height = 30;
+
+    // market table
+    let r = 10;
+    const h = ws.getCell(r, 2); h.value = 'By market'; h.font = font({ size:14, bold:true }); r++;
+    const mcols = ['Market', 'Stores', 'ABO Debit', 'ABO Credit', 'Total Card', 'Bank', 'Difference', 'Carry-in from prior month', 'Settles next month', 'Unexplained', 'Days matched', 'Days explained', 'Days to review', 'Bank items', 'Status'];
+    const hr = ws.getRow(r); mcols.forEach((x, i) => hr.getCell(i + 2).value = x); styleHeader(hr, 2, 2, C.navy); styleHeader(hr, 3, 16, C.steel); hr.height = 34;
+    const mStart = r + 1;
+    for (const mk of mks) {
+      r++; const ss = scope.filter(s => s.market === mk.name); const row = ws.getRow(r);
+      row.getCell(2).value = mk.name;
+      row.getCell(3).value = { formula:`COUNTIF(${SS('A')},$B${r})`, result:ss.length };
+      const S = (col, v) => ({ formula:`SUMIFS(${SS(col)},${SS('A')},$B${r})`, result:E.r2(v) });
+      const sm = k => ss.reduce((a, s) => a + (typeof k === 'function' ? k(s) : s[k]), 0);
+      row.getCell(4).value = S('G', sm('F')); row.getCell(5).value = S('H', sm('G')); row.getCell(6).value = S('I', sm('H'));
+      row.getCell(7).value = S('J', sm('I')); row.getCell(8).value = S('K', sm('J')); row.getCell(9).value = S('L', sm('boundaryIn'));
+      row.getCell(10).value = S('M', sm('carryOut')); row.getCell(11).value = S('N', sm('unexplained'));
+      row.getCell(12).value = S('O', sm(s => s.counts.matched)); row.getCell(13).value = S('P', sm(storeExplained)); row.getCell(14).value = S('Q', sm(s => s.counts.exception));
+      row.getCell(15).value = S('R', sm(s => bankItems(s).length));
+      const st = ss.some(s => s.counts.exception) ? 'Review' : ss.some(s => bankItems(s).length) ? 'Bank item' : 'Clean';
+      for (let c = 2; c <= 16; c++) { const x = row.getCell(c); x.font = font({ size:11 }); x.border = BOX; x.alignment = c === 2 ? { horizontal:'left', vertical:'middle' } : CENTER; if ((r - mStart) % 2) x.fill = fill(C.weekend); }
+      [4, 5, 6, 7, 8, 9, 10, 11].forEach(c => row.getCell(c).numFmt = USD);
+      if (Math.abs(sm('unexplained')) >= .01) { row.getCell(11).font = font({ size:11, bold:true, color:{ argb:C.reviewInk } }); row.getCell(11).fill = fill(C.review); }
+      statusCell(row.getCell(16), st); row.getCell(16).font = { ...row.getCell(16).font, size:11 };
+    }
+    r++; const tr = ws.getRow(r); tr.getCell(2).value = 'Total';
+    for (let c = 3; c <= 15; c++) { let a = 0; for (let k = mStart; k < r; k++) a += V(ws.getCell(k, c).value); tr.getCell(c).value = { formula:`SUM(${colL(c)}${mStart}:${colL(c)}${r - 1})`, result:E.r2(a) }; }
+    for (let c = 2; c <= 16; c++) { const x = tr.getCell(c); x.font = font({ bold:true, color:{ argb:C.navy } }); x.fill = fill(C.ice2); x.border = { top:{ style:'medium', color:{ argb:C.navy } }, bottom:{ style:'medium', color:{ argb:C.navy } }, left:thin, right:thin }; x.alignment = c === 2 ? { horizontal:'left', vertical:'middle' } : CENTER; }
+    [4, 5, 6, 7, 8, 9, 10, 11].forEach(c => tr.getCell(c).numFmt = USD);
+
+    // reconciliation bridge
+    r += 2; ws.getCell(r, 2).value = 'How the difference breaks down'; ws.getCell(r, 2).font = font({ size:14, bold:true });
+    const bridge = [
+      ['Bank deposits minus card sales', { formula:`SUM(${SS('K')})`, result:E.r2(scope.reduce((a, s) => a + s.J, 0)) }, 'Total of the Difference column across all stores.'],
+      ['Carry-in from prior month', { formula:`SUM(${SS('L')})`, result:E.r2(scope.reduce((a, s) => a + s.boundaryIn, 0)) }, 'Deposits on the 1st that belong to sales on the last day of the previous month.'],
+      ['Settles next month', { formula:`-SUM(${SS('M')})`, result:-E.r2(scope.reduce((a, s) => a + s.carryOut, 0)) }, 'Sales after the cut-off on the last day, deposited in the next month.'],
+      ['Net unexplained', { formula:`SUM(${SS('N')})`, result:E.r2(scope.reduce((a, s) => a + s.unexplained, 0)) }, 'Days on the To review tab.'],
+    ];
+    bridge.forEach(([l, v, note], i) => {
+      r++; const row = ws.getRow(r);
+      row.getCell(2).value = l; ws.mergeCells(r, 2, r, 3);
+      row.getCell(4).value = v; row.getCell(4).numFmt = USD;
+      ws.mergeCells(r, 5, r, 11); row.getCell(5).value = note;
+      [2, 4, 5].forEach(c => { const x = row.getCell(c); x.font = font({ size:11, bold:i === 0 || i === 3, color:{ argb: c === 5 ? 'FF595959' : C.ink } }); x.border = { bottom:thin }; x.alignment = { vertical:'middle', horizontal:c === 4 ? 'right' : 'left' }; });
+      if (i === 3) row.getCell(4).fill = fill(C.review);
+    });
+    r++; const chk = ws.getRow(r); chk.getCell(2).value = 'Timing differences inside the month'; ws.mergeCells(r, 2, r, 3);
+    chk.getCell(4).value = { formula:`D${r - 4}-D${r - 3}-D${r - 2}-D${r - 1}`, result:0 }; chk.getCell(4).numFmt = USD;
+    ws.mergeCells(r, 5, r, 11); chk.getCell(5).value = 'Should be $0.00: sales after the cut-off and split batches land in the next day\'s deposit and cancel out within the month.';
+    [2, 4, 5].forEach(c => { const x = chk.getCell(c); x.font = font({ size:11, color:{ argb: c === 5 ? 'FF595959' : C.ink } }); x.alignment = { vertical:'middle', horizontal:c === 4 ? 'right' : 'left' }; });
+
+    // largest open items
+    r += 2; ws.getCell(r, 2).value = 'Largest items to review'; ws.getCell(r, 2).font = font({ size:14, bold:true }); r++;
+    const ih = ws.getRow(r); ['Store', 'Market', 'Date', 'Amount', 'What the app found'].forEach((x, i) => ih.getCell([2, 3, 5, 6, 7][i]).value = x);
+    ws.mergeCells(r, 3, r, 4); ws.mergeCells(r, 7, r, 16); styleHeader(ih, 2, 16, C.steel);
+    const items = [];
+    scope.forEach(s => s.rows.forEach(d => { if (d.status === 'exception') items.push({ s, date:d.date, amt:d.resid, text:d.comment }); }));
+    scope.forEach(s => bankItems(s).forEach(o => items.push({ s, date:o.asof, amt:o.amt, text:`${KN[o.kind] || o.kind} in bank file` })));
+    items.sort((a, b) => Math.abs(b.amt) - Math.abs(a.amt));
+    items.slice(0, 15).forEach(it => {
+      r++; const row = ws.getRow(r);
+      row.getCell(2).value = `${it.s.store} ${it.s.name}`; ws.mergeCells(r, 3, r, 4); row.getCell(3).value = it.s.market;
+      row.getCell(5).value = new Date(it.date + 'T00:00:00Z'); row.getCell(5).numFmt = 'd-mmm-yy';
+      row.getCell(6).value = it.amt; row.getCell(6).numFmt = USD;
+      ws.mergeCells(r, 7, r, 16); row.getCell(7).value = it.text;
+      for (let c = 2; c <= 16; c++) { const x = row.getCell(c); x.font = font({ size:11 }); x.border = BOX; x.alignment = { vertical:'middle', horizontal:c === 5 || c === 6 ? 'center' : 'left', wrapText:c === 7 }; }
+    });
+    if (!items.length) { r++; ws.getCell(r, 2).value = 'Nothing to review.'; ws.getCell(r, 2).font = font({ italic:true }); }
+    if (items.length > 15) { r++; ws.getCell(r, 2).value = `${items.length - 15} more on the To review tab.`; ws.getCell(r, 2).font = font({ size:10, italic:true }); }
+
+    // legend
+    r += 2; ws.getCell(r, 2).value = 'Colour key on the market tabs'; ws.getCell(r, 2).font = font({ size:12, bold:true });
+    [[C.timing, 'Difference explained by batch timing (comment says which sales moved)'], [C.carry, 'Carry-in from the previous month'], [C.review, 'Needs review']].forEach(([c, l]) => {
+      r++; ws.getCell(r, 2).fill = fill(c); ws.getCell(r, 2).border = BOX; ws.mergeCells(r, 3, r, 11); ws.getCell(r, 3).value = l; ws.getCell(r, 3).font = font({ size:11 });
+    });
+  }
+  // ================= Client summary (team's client format) =================
+  {
+    const ws = cli;
+    const list = mks; // same order as the store list
+    const BLACK = { style:'thin', color:{ argb:'FFB4C0CF' } }; const BB = { top:BLACK, bottom:BLACK, left:BLACK, right:BLACK };
+    [24, 17, 17, 19, 17, 14, 70].forEach((w, i) => ws.getColumn(i + 1).width = w);
+    const ord = n => n + (n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th');
+    const monAbbr = monthStart.toLocaleString('en-US', { month:'short', timeZone:'UTC' });
+    ws.mergeCells('A1:G1');
+    const t = ws.getCell('A1'); t.value = `Spacetel Card Summary Report from 1st to ${ord(nD)} ${monAbbr}'${String(Y).slice(2)}`;
+    t.font = font({ size:14, bold:true, color:{ argb:C.white } }); t.alignment = CENTER; t.fill = fill(C.navy); t.border = BB; ws.getRow(1).height = 26;
+    const heads = ['District Manager', 'ABO Debit Card', 'ABO Credit Card', 'Total Card Amount', 'Bank', 'Difference', 'Comments'];
+    heads.forEach((h, i) => { const c = ws.getCell(2, i + 1); c.value = h; c.font = font({ bold:true, color:{ argb:C.white } }); c.alignment = CENTER; c.fill = fill(C.steel); c.border = BB; });
+    ws.getRow(2).height = 20;
+    const crit = n => `"${n.replace(/"/g, '""')}"`;
+    const SI = (col, n) => `SUMIFS(${SS(col)},${SS('A')},${crit(n)})`;
+    let r = 3;
+    const commentFor = ss => {
+      const lines = [];
+      for (const s of ss) {
+        const ex = s.rows.filter(d => d.status === 'exception');
+        const held = new Map();
+        for (const d of ex) {
+          if (d.linked && (d.linked.kind === 'REL' || d.linked.kind === 'ADJ')) { const k = d.linked.desc + d.linked.asof; const g = held.get(k) || { o:d.linked, rows:[] }; g.rows.push(d); held.set(k, g); continue; }
+          let hint = '';
+          const tx = d.txns.find(x => Math.abs(x.amt + d.resid) < 0.01);
+          if (d.resid < 0 && tx) hint = ` (${money(tx.amt)} sale at ${E.clock(tx.mins)} not deposited – void?)`;
+          else if (d.I === 0 && d.H) hint = ' (no deposit received)';
+          lines.push(`${s.name}: ${money(Math.abs(d.resid))} ${d.resid < 0 ? 'short' : 'over'} on ${md(d.date)}${hint}`);
+        }
+        for (const g of held.values()) {
+          const tot = E.r2(g.rows.reduce((a, d) => a + d.resid, 0));
+          lines.push(`${s.name}: ${money(Math.abs(tot))} ${g.o.kind === 'REL' ? 'held by processor' : 'adjusted'} ${md(g.rows[0].date)}–${md(g.rows[g.rows.length - 1].date)}, ${g.o.kind === 'REL' ? 'released' : 'adjustment posted'} ${md(g.o.asof)}`);
+        }
+      }
+      const items = [];
+      ss.forEach(s => bankItems(s).forEach(o => items.push(`${s.name} ${o.amt < 0 ? '-' : '+'}${money(Math.abs(o.amt))} (${md(o.asof)})`)));
+      if (items.length) lines.push(`Chargebacks/adjustments, not in Bank: ${items.join(', ')}`);
+      return lines;
+    };
+    for (const mk of list) {
+      const ss = scope.filter(s => s.market === mk.name); const row = ws.getRow(r);
+      const sm = k => E.r2(ss.reduce((a, s) => a + s[k], 0));
+      const card = sm('H'), bankAdj = E.r2(sm('I') - sm('boundaryIn') + sm('carryOut'));
+      row.getCell(1).value = (ss[0] && ss[0].client) || mk.name;
+      row.getCell(2).value = { formula:SI('G', mk.name), result:sm('F') };
+      row.getCell(3).value = { formula:SI('H', mk.name), result:sm('G') };
+      row.getCell(4).value = { formula:`B${r}+C${r}`, result:card };
+      row.getCell(5).value = { formula:`${SI('J', mk.name)}-${SI('L', mk.name)}+${SI('M', mk.name)}`, result:bankAdj };
+      row.getCell(6).value = { formula:`E${r}-D${r}`, result:E.r2(bankAdj - card) };
+      const lines = commentFor(ss);
+      row.getCell(7).value = lines.join('\n') || null;
+      const zebra = (r - 3) % 2 === 1; const realDiff = Math.abs(E.r2(bankAdj - card)) >= .01;
+      for (let c = 1; c <= 7; c++) { const x = row.getCell(c); x.border = BB; x.font = font({ bold:c === 1 || (c === 6 && realDiff), color:{ argb: c === 6 && realDiff ? C.reviewInk : c === 1 ? C.navy : C.ink } }); if (zebra) x.fill = fill(C.weekend); if (c === 6 && realDiff) x.fill = fill(C.coral); x.alignment = c === 7 ? { horizontal:'left', vertical:'middle', wrapText:true } : CENTER; if (c >= 2 && c <= 6) x.numFmt = USD; }
+      row.height = Math.max(18, 16 * Math.max(1, lines.reduce((a, l) => a + Math.ceil(l.length / 75), 0)));
+      r++;
+    }
+    const tr = ws.getRow(r); tr.getCell(1).value = 'Total';
+    const tsum = c => { let a = 0; for (let k = 3; k < r; k++) a += V(ws.getCell(k, c).value); return E.r2(a); };
+    for (let c = 2; c <= 6; c++) tr.getCell(c).value = { formula:`SUM(${colL(c)}3:${colL(c)}${r - 1})`, result:tsum(c) };
+    for (let c = 1; c <= 7; c++) { const x = tr.getCell(c); x.font = font({ bold:true, color:{ argb:C.navy } }); x.fill = fill(C.ice2); x.border = { top:{ style:'medium', color:{ argb:C.navy } }, bottom:{ style:'medium', color:{ argb:C.navy } }, left:BLACK, right:BLACK }; x.alignment = CENTER; if (c >= 2 && c <= 6) x.numFmt = USD; }
+    tr.height = 20;
+    const ci = E.r2(scope.reduce((a, s) => a + s.boundaryIn, 0)), co = E.r2(scope.reduce((a, s) => a + s.carryOut, 0)), raw = E.r2(scope.reduce((a, s) => a + s.I, 0));
+    ws.mergeCells(r + 2, 1, r + 2, 7);
+    const n = ws.getCell(r + 2, 1);
+    n.value = `Bank = card deposits received for ${monAbbr} sales: ${money(raw)} deposited for business days ${md(RES.first)}–${md(RES.last)}, less ${money(ci)} that belongs to sales before ${md(RES.first)}, plus ${money(co)} of ${md(RES.last)} sales made after the ${E.clock(RES.globalCut)} batch cut-off and deposited next month. Chargebacks and adjustments are listed in Comments and not included in Bank.`;
+    n.font = font({ size:10, italic:true, color:{ argb:'FF595959' } }); n.alignment = { wrapText:true, vertical:'top' }; ws.getRow(r + 2).height = 44;
+    ws.pageSetup = { orientation:'landscape', fitToPage:true, fitToWidth:1, fitToHeight:0 };
+  }
+  addStoreListSheet(wb, master);
+  const buf = await wb.xlsx.writeBuffer();
+  return new Blob([buf], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+}
+// "Store list" sheet: the template the team edits and loads back into the app
+function addStoreListSheet(wb, list){
+  const ws = wb.addWorksheet('Store list', { properties:{ tabColor:{ argb:'FF5B6B7F' } }, views:[{ state:'frozen', ySplit:4 }] });
+  const font = (o = {}) => ({ name:'Calibri', size:11, ...o }); const fill = c => ({ type:'pattern', pattern:'solid', fgColor:{ argb:c } });
+  const line = { style:'thin', color:{ argb:'FFD3DAE3' } }; const BOX = { top:line, bottom:line, left:line, right:line };
+  const cols = [['Store #', 9], ['Store name', 34], ['Market (sheet name)', 24], ['District Manager', 24], ['Name on client summary', 24], ['Merchant ID', 20]];
+  cols.forEach(([, w], i) => ws.getColumn(i + 1).width = w);
+  ws.mergeCells('A1:F1'); const t = ws.getCell('A1'); t.value = 'Store list for card reconciliation'; t.font = font({ size:15, bold:true, color:{ argb:'FFFFFFFF' } }); t.fill = fill('FF1F2A44'); t.alignment = { vertical:'middle', indent:1 }; ws.getRow(1).height = 26;
+  ws.mergeCells('A2:F2'); const n = ws.getCell('A2');
+  n.value = 'To add a store, add a row. To remove one, delete its row. Market decides which sheet the store goes on; markets appear in the order they are listed here. Merchant ID is the 14–15 digit number in the bank description (MERCHANT SERVICE MERCH DEP … <ID>); keep the column as Text. Save and load it in the app under Stores > Load store list.';
+  n.font = font({ size:10, italic:true, color:{ argb:'FF5B6B7F' } }); n.alignment = { wrapText:true, vertical:'top' }; ws.getRow(2).height = 44;
+  cols.forEach(([h], i) => { const c = ws.getCell(4, i + 1); c.value = h; c.font = font({ bold:true, color:{ argb:'FFFFFFFF' } }); c.fill = fill(i === 0 ? 'FF1F2A44' : 'FF34557A'); c.border = BOX; c.alignment = { horizontal:'center', vertical:'middle', wrapText:true }; });
+  ws.getRow(4).height = 22;
+  list.forEach((s, k) => {
+    const r = 5 + k; const vals = [s.store, s.name, s.market, s.dm, s.client || s.market, String(s.mid)];
+    vals.forEach((v, i) => { const c = ws.getCell(r, i + 1); c.value = v; c.font = font({ color:{ argb:'FF1F2A44' } }); c.border = BOX; c.alignment = { horizontal:i === 0 || i === 5 ? 'center' : 'left', vertical:'middle' }; if (k % 2) c.fill = fill('FFF6F8FB'); });
+    ws.getCell(r, 6).numFmt = '@';
+  });
+  for (let r = 5 + list.length; r < 5 + list.length + 30; r++) ws.getCell(r, 6).numFmt = '@';
+  ws.autoFilter = { from:{ row:4, column:1 }, to:{ row:4 + list.length, column:6 } };
+  return ws;
+}
+async function saveFile(blob, fname){
+  if (downloads) return downloads.save({ filename:fname, data:blob });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = fname; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+
+})();
+</script>
+</body>
+</html>
